@@ -20,11 +20,14 @@ description:         Please see the README on Github at <https://github.com/Sipr
 library
   hs-source-dirs:      src
   exposed-modules:
-      Parser.Type
+      Network.URI.Static
       Parser.Gogoanime
+      Parser.Type
       Rest
+
   build-depends:
       base >= 4.7 && < 5
+
     , bytestring
     , data-default
     , either
@@ -34,16 +37,18 @@ library
     , hxt
     , hxt-css
     , lens
+    , network-uri
     , servant
     , servant-server
-    , text
     , tagsoup
+    , template-haskell
+    , text
     , wreq
     , xml
 
   default-language:    Haskell2010
 
-executable gogoanime-rss-exe
+executable gogoanime-rss
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N

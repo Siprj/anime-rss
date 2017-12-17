@@ -20,4 +20,4 @@ main = do
 -- which you can think of as an "abstract" web application,
 -- not yet a webserver.
 app1 :: Application
-app1 = serve userAPI rssApiHandler
+app1 = serve userAPI $ rssApiHandler gogoanimeUrl

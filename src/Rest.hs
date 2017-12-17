@@ -20,6 +20,7 @@ import Data.ByteString.Lazy.Char8(pack)
 import Data.Typeable (Typeable)
 import Data.Text (Text, unpack)
 import Network.HTTP.Media ((//), (/:))
+import Network.URI (URI)
 import Servant.API.ContentTypes
     ( Accept(contentType)
     , MimeRender(mimeRender)
@@ -42,6 +43,7 @@ import Text.Atom.Feed
     )
 import Text.Atom.Feed.Export (xmlFeed)
 import Text.Atom.Feed.Import (elementFeed)
+import Text.Show (show)
 
 
 xmlVersion :: String
@@ -68,16 +70,15 @@ instance MimeUnrender AtomFeed Feed where
 
 type RssApi = "atom" :> Get '[AtomFeed] Feed
 
-rssApiHandler :: Server RssApi
-rssApiHandler = do
-    liftIO $ print $ fd {feedEntries = fmap toEntry posts, feedLinks = [nullLink "http://example.com/"]}
+rssApiHandler :: URI -> Server RssApi
+rssApiHandler baseUrl = do
     return $ fd {feedEntries = fmap toEntry posts, feedLinks = [nullLink "http://example.com/"]}
   where
     fd :: Feed
     fd = nullFeed
-        "http://example.com/atom.xml" -- ID
+        (show baseUrl) -- ID
         (TextString "Example Website") -- Title
-        ""
+        "" -- Last updated
 
     toEntry :: (String, Text) -> Entry
     toEntry (url, content) = toEntry'
