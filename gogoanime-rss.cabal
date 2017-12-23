@@ -55,11 +55,21 @@ library
     , xml-conduit
 
   default-language:    Haskell2010
+  ghc-options:
+    -Wall
+    -Wimplicit-prelude
+    -Wmissing-import-lists
 
 executable gogoanime-rss
   hs-source-dirs:      app
   main-is:             Main.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+    -Wimplicit-prelude
+    -Wmissing-import-lists
+
   build-depends:
       base
 
@@ -79,7 +89,13 @@ test-suite gogoanime-rss-test
       base
     , gogoanime-rss
 
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+    -Wimplicit-prelude
+    -Wmissing-import-lists
+
   default-language:    Haskell2010
 
 source-repository head
