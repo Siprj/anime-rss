@@ -17,6 +17,11 @@ cabal-version:       >=1.10
 -- common to point users to the README.md file.
 description:         Please see the README on Github at <https://github.com/Siprj/gogoanime-rss#readme>
 
+flag pedantic
+    description:          Pass additional warning flags and -Werror to GHC.
+    default:              False
+    manual:               True
+
 library
   hs-source-dirs:      src
   exposed-modules:
@@ -58,16 +63,22 @@ library
     -Wall
     -Wimplicit-prelude
     -Wmissing-import-lists
+  if flag(pedantic)
+    ghc-options:
+      -Werror
 
 executable gogoanime-rss
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:
-    -threaded
     -rtsopts
-    -with-rtsopts=-N
+    -threaded
     -Wimplicit-prelude
+    -with-rtsopts=-N
     -Wmissing-import-lists
+  if flag(pedantic)
+    ghc-options:
+      -Werror
 
   build-depends:
       base
