@@ -12,33 +12,25 @@ module Rest
     )
   where
 
-import Control.Exception (Exception, throw)
-import Control.Monad.IO.Class
 import Control.Applicative (pure)
-import Control.Monad ((>>=))
+import Control.Exception (Exception, throw)
 import Data.Default(def)
+import Data.Either (Either(Right, Left))
 import Data.Function (($), (.))
 import Data.Functor (fmap)
-import Data.String (String)
-import Data.Set (Set)
-import Data.Either (Either(Right, Left))
 import Data.Maybe (Maybe(Just, Nothing))
-import Data.Monoid((<>))
-import Data.ByteString.Lazy.Char8(pack)
+import Data.Set (Set)
+import Data.Text.Lazy.Encoding (encodeUtf8)
+import Data.Text (Text, pack)
 import Data.Typeable (Typeable)
-import Data.Text (Text)
-import qualified Data.Text.Lazy as LZT (Text)
-import qualified Data.Text.Lazy.Encoding as LZT (encodeUtf8)
-import qualified Data.Text as Text (pack)
-import Network.HTTP.Media ((//), (/:))
+import Network.HTTP.Media ((//))
 import Network.URI (URI)
+import Servant.API ((:>), Get)
 import Servant.API.ContentTypes
     ( Accept(contentType)
     , MimeRender(mimeRender)
     , MimeUnrender(mimeUnrender)
     )
-import Text.XML.Light.Output (showElement)
-import Servant.API ((:>), Get)
 import Servant.Server (Server)
 import Text.Atom.Feed
     ( EntryContent(HTMLContent)
@@ -53,19 +45,17 @@ import Text.Atom.Feed
     , nullPerson
     )
 import qualified Text.Atom.Feed as Atom (Feed)
-import Text.Atom.Feed.Import (elementFeed)
+import Text.Feed.Constructor (feedFromAtom)
 import Text.Feed.Export (xmlFeed)
 import Text.Feed.Import (parseFeedSource)
 import Text.Feed.Types (Feed)
-import Text.Feed.Constructor (feedFromAtom)
+import Text.Show (Show, show)
 import Text.XML
-    ( Document(Document, documentPrologue, documentRoot, documentEpilogue)
-    , Prologue(Prologue, prologueBefore, prologueDoctype, prologueAfter)
-    , Miscellaneous(MiscComment)
+    ( Document(Document, documentEpilogue, documentPrologue, documentRoot)
+    , Prologue(Prologue, prologueAfter, prologueBefore, prologueDoctype)
     , fromXMLElement
     , renderText
     )
-import Text.Show (Show, show)
 
 
 maybeToRight :: e -> Maybe a -> Either e a
@@ -85,7 +75,8 @@ instance Exception FeedRendererException
 
 instance MimeRender AtomFeed Feed where
     mimeRender _ val =
-        LZT.encodeUtf8 . renderText def . toDocument $ fromRight' $ fromXMLElement $ xmlFeed val
+        encodeUtf8 . renderText def . toDocument . fromRight' . fromXMLElement
+            $ xmlFeed val
       where
         toDocument v = Document
             { documentPrologue = Prologue
@@ -115,7 +106,7 @@ rssApiHandler baseUrl = do
   where
     fd :: Atom.Feed
     fd = nullFeed
-        (Text.pack $ show baseUrl) -- ID
+        (pack $ show baseUrl) -- ID
         (TextString "Example Website") -- Title
         "" -- Last updated
 

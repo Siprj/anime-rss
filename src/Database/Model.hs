@@ -11,28 +11,31 @@ module Database.Model
     ( DataModel
     , SetFeed
     , Feed(..)
+    , addFeedIfUnique
+    , listFeeds
     )
   where
 
 import Control.Applicative (pure)
 import Control.Monad.Reader (ask)
-import System.IO (IO)
 import Control.Monad.State (get, put)
-import Data.Acid (Update, Query, AcidState, makeAcidic, update, query)
+import Data.Acid (AcidState, Query, Update, makeAcidic, query, update)
 import Data.Data (Data)
 import Data.Eq ((==), Eq)
-import Data.Function (($))
-import Data.Function ((.), const)
+import Data.Function (($), (.), const)
 import Data.Maybe (maybe)
 import Data.SafeCopy (base, deriveSafeCopy)
 import Data.Text (Text)
 import Data.Time.Clock (getCurrentTime)
 import Data.Time (UTCTime)
 import Data.Typeable (Typeable)
-import Data.Vector (Vector, find, cons)
+import Data.Vector (Vector, cons, find)
 import GHC.Generics (Generic)
-import Network.URI (URI, URIAuth)
+import Network.URI (URI)
+import System.IO (IO)
 import Text.Show (Show)
+
+import Database.OrphanInstances ()
 
 
 data DataModel = DataModel (Vector Feed)
@@ -45,8 +48,6 @@ data Feed = Feed
     }
   deriving (Eq, Typeable, Generic, Data, Show)
 
-$(deriveSafeCopy 0 'base ''URI)
-$(deriveSafeCopy 0 'base ''URIAuth)
 $(deriveSafeCopy 0 'base ''Feed)
 $(deriveSafeCopy 0 'base ''DataModel)
 
@@ -62,7 +63,8 @@ $(deriveSafeCopy 0 'base ''SetFeed)
 addFeedIfUnique' :: SetFeed -> UTCTime -> Update DataModel ()
 addFeedIfUnique' SetFeed{..} date = do
     DataModel feedVector <- get
-    maybe (prependFeed feedVector) (pure . const ()) $ find compareFeeds feedVector
+    maybe (prependFeed feedVector) (pure . const ())
+        $ find compareFeeds feedVector
   where
     prependFeed :: Vector Feed -> Update DataModel ()
     prependFeed feedVector = put $ DataModel $ cons buildFeed feedVector

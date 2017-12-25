@@ -1,5 +1,5 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Network.URI.Static
     ( staticURI
@@ -13,7 +13,8 @@ import Data.Maybe (fromJust)
 import Data.Monoid ((<>))
 import Data.String (String)
 import Language.Haskell.TH (Q, TExp)
-import Network.URI (isURI, parseURI, URI)
+import Network.URI (URI, isURI, parseURI)
+
 
 staticURI :: String -> Q (TExp URI)
 staticURI uri | isURI uri = [|| fromJust $ parseURI uri ||]

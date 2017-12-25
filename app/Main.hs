@@ -1,12 +1,20 @@
-module Main where
+{-# LANGUAGE NoImplicitPrelude #-}
 
-import Data.Proxy
-import Network.Wai
-import Servant.Server
-import Network.Wai.Handler.Warp
+module Main
+    (main)
+  where
 
-import Parser.Gogoanime
-import Rest
+import Control.Monad ((>>=))
+import Data.Function (($))
+import Data.Proxy (Proxy(Proxy))
+import Network.Wai (Application)
+import Network.Wai.Handler.Warp (run)
+import Servant.Server (serve)
+import System.IO (IO, print)
+
+import Parser.Gogoanime (getEntrisFromFronPage, gogoanimeUrl)
+import Rest (RssApi, rssApiHandler)
+
 
 userAPI :: Proxy RssApi
 userAPI = Proxy

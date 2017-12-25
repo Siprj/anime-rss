@@ -25,6 +25,7 @@ library
       Parser.Type
       Rest
       Database.Model
+      Database.OrphanInstances
 
   build-depends:
       base >= 4.7 && < 5
@@ -33,7 +34,6 @@ library
     , bytestring
     , containers
     , data-default
-    , either
     , feed
     , HandsomeSoup
     , http-media
@@ -45,7 +45,6 @@ library
     , safecopy
     , servant
     , servant-server
-    , tagsoup
     , template-haskell
     , text
     , time

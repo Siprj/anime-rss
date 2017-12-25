@@ -1,3 +1,5 @@
+{-# LANGUAGE NoImplicitPrelude #-}
+
 module Parser.Type
     ( AnimeEntry(..)
     )
@@ -5,6 +7,7 @@ module Parser.Type
 
 import Data.String (String)
 import Network.URI (URI)
+import Text.Show (Show)
 
 data AnimeEntry = AnimeEntry
     { title :: String
