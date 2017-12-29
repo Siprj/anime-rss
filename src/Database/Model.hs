@@ -38,7 +38,7 @@ import Text.Show (Show)
 import Database.OrphanInstances ()
 
 
-data DataModel = DataModel (Vector Feed)
+newtype DataModel = DataModel (Vector Feed)
 
 data Feed = Feed
     { name :: Text
@@ -67,7 +67,7 @@ addFeedIfUnique' SetFeed{..} date = do
         $ find compareFeeds feedVector
   where
     prependFeed :: Vector Feed -> Update DataModel ()
-    prependFeed feedVector = put $ DataModel $ cons buildFeed feedVector
+    prependFeed feedVector = put . DataModel $ cons buildFeed feedVector
     buildFeed = Feed
         { name = setFeedName
         , url = setFeedUrl
@@ -89,5 +89,4 @@ addFeedIfUnique state feed = do
     update state (AddFeedIfUnique' feed now)
 
 listFeeds :: AcidState DataModel -> IO (Vector Feed)
-listFeeds state = do
-    query state ListFeeds'
+listFeeds state = query state ListFeeds'

@@ -1,4 +1,3 @@
-{-# LANGUAGE Arrows #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -68,7 +67,7 @@ data AtomFeed
 instance Accept AtomFeed where
     contentType _ = "application" // "atom+xml"
 
-data FeedRendererException = FeedRendererException (Set Text)
+newtype FeedRendererException = FeedRendererException (Set Text)
     deriving Show
 
 instance Exception FeedRendererException
@@ -98,11 +97,10 @@ instance MimeUnrender AtomFeed Feed where
 type RssApi = "atom" :> Get '[AtomFeed] Feed
 
 rssApiHandler :: URI -> Server RssApi
-rssApiHandler baseUrl = do
-    pure $ feedFromAtom $ fd
-        { feedEntries = fmap toEntry posts
-        , feedLinks = [nullLink "http://example.com/"]
-        }
+rssApiHandler baseUrl = pure . feedFromAtom $ fd
+    { feedEntries = fmap toEntry posts
+    , feedLinks = [nullLink "http://example.com/"]
+    }
   where
     fd :: Atom.Feed
     fd = nullFeed

@@ -8,5 +8,6 @@ packages:
 
 extra-deps:
   - acid-state-0.14.3
+  - hlint-test-0.1.0.0
 
 resolver: lts-10.0
