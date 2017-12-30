@@ -9,9 +9,10 @@
 
 module Database.Model
     ( DataModel
-    , SetFeed
+    , SetFeed(..)
     , Feed(..)
     , addFeedIfUnique
+    , defaultDataModel
     , listFeeds
     )
   where
@@ -29,7 +30,7 @@ import Data.Text (Text)
 import Data.Time.Clock (getCurrentTime)
 import Data.Time (UTCTime)
 import Data.Typeable (Typeable)
-import Data.Vector (Vector, cons, find)
+import Data.Vector (Vector, cons, find, fromList)
 import GHC.Generics (Generic)
 import Network.URI (URI)
 import System.IO (IO)
@@ -39,6 +40,9 @@ import Database.OrphanInstances ()
 
 
 newtype DataModel = DataModel (Vector Feed)
+
+defaultDataModel :: DataModel
+defaultDataModel = DataModel $ fromList []
 
 data Feed = Feed
     { name :: Text
@@ -54,7 +58,6 @@ $(deriveSafeCopy 0 'base ''DataModel)
 data SetFeed = SetFeed
     { setFeedName :: Text
     , setFeedUrl :: URI
-    , setFeedDate :: UTCTime
     , setFeedImgUrl :: URI
     }
 
