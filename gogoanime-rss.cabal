@@ -31,6 +31,7 @@ library
       Rest
       Database.Model
       Database.OrphanInstances
+      Database.Service
 
   build-depends:
       base >= 4.7 && < 5
@@ -40,6 +41,7 @@ library
     , containers
     , data-default
     , feed
+    , freer-effects
     , HandsomeSoup
     , http-media
     , hxt
@@ -50,6 +52,7 @@ library
     , safecopy
     , servant
     , servant-server
+    , stm
     , template-haskell
     , text
     , time

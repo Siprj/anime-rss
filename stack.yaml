@@ -9,5 +9,6 @@ packages:
 extra-deps:
   - acid-state-0.14.3
   - hlint-test-0.1.0.0
+  - https://github.com/IxpertaSolutions/freer-effects/archive/39a7e62cc049d43d36ece4ac24ba19e545f0b726.zip
 
 resolver: lts-10.0
