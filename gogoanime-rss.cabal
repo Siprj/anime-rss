@@ -25,13 +25,14 @@ flag pedantic
 library
   hs-source-dirs:      src
   exposed-modules:
+      Control.Monad.Freer.Service
+      Database.Model
+      Database.OrphanInstances
+      Database.Service
       Network.URI.Static
       Parser.Gogoanime
       Parser.Type
       Rest
-      Database.Model
-      Database.OrphanInstances
-      Database.Service
 
   build-depends:
       base >= 4.7 && < 5
