@@ -11,8 +11,8 @@ module Main
 
 import Control.Concurrent (forkIO)
 import Control.Monad ((>>=))
-import Control.Monad.Freer (runM, send)
-import Control.Monad.Freer.Internal (Eff(E, Val), inj, tsingleton)
+import Control.Monad.Freer (runM, send, runNat)
+import Control.Monad.Freer.Internal (Eff(E, Val))
 import Control.Monad.Freer.Reader (runReader)
 import Data.Acid (openLocalState)
 import Database.Model (defaultDataModel)
@@ -33,7 +33,7 @@ import Servant.Server (Handler, serve, hoistServer)
 import Control.Monad.IO.Class (liftIO)
 import System.IO (IO, print)
 
-import Control.Monad.Freer.Service (ServiceChannel, interpret)
+import Control.Monad.Freer.Service (ServiceChannel)
 import Database.Service (Database)
 import Network.URI.Static (staticURI)
 
@@ -65,7 +65,5 @@ main = do
         runM . intLiftIO . runDatabaseEffect databaseChan
         $ runReader eff (Context baseUrl "pokus")
 
---type Handler' = Eff [Reader Context, Database, Handler]
---type RestServer api = ServerT api Handler'
 intLiftIO :: Eff '[IO, Handler] r -> Eff '[Handler] r
-intLiftIO = interpret (send . (liftIO :: IO a -> Handler a))
+intLiftIO = runNat (liftIO :: IO a -> Handler a)

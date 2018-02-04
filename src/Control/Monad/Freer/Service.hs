@@ -14,15 +14,13 @@ module Control.Monad.Freer.Service
     , createServiceChannel
     , runServiceChannel
     , runServiceEffect
-    , interpret
     )
   where
 
-import Control.Applicative ((<$>), pure)
+import Control.Applicative ((<$>))
 import Control.Concurrent.MVar (MVar, newEmptyMVar, takeMVar, putMVar)
 import Control.Concurrent.STM.TChan (TChan, newTChanIO, writeTChan, readTChan)
-import Control.Monad ((>>=))
-import Control.Monad.Freer (Eff, Member, send, handleRelay)
+import Control.Monad.Freer (Eff, Member, runNat)
 import Control.Monad.STM (atomically)
 import Data.Function (($))
 import System.IO (IO)
@@ -66,14 +64,10 @@ runServiceEffect
     => ServiceChannel service
     -> Eff (service ': effs) a
     -> Eff effs a
-runServiceEffect (ServiceChannel chan) = interpret go
+runServiceEffect (ServiceChannel chan) = runNat go
   where
-    go :: service s -> Eff effs s
-    go v = send $ do
+    go :: service s -> IO s
+    go v = do
         respMVar <- newEmptyMVar
         atomically $ writeTChan chan (ChannelContainer (put v) respMVar)
         takeMVar respMVar
-
--- TODO: Move this into freer-effects!!!
-interpret :: (forall s. eff s -> Eff effs s) -> Eff (eff ': effs) a -> Eff effs a
-interpret f = handleRelay pure (\v f' -> f v >>= f')
