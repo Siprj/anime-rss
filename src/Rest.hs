@@ -1,27 +1,38 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Rest
     ( RssApi
+    , Context(..)
     , rssApiHandler
     )
   where
 
 import Control.Applicative (pure)
 import Control.Exception (Exception, throw)
+import Control.Monad.Freer (Eff)
+import Control.Monad.Freer.Reader (Reader, ask)
+import Data.ByteString.Lazy (ByteString)
 import Data.Default(def)
 import Data.Either (Either(Right, Left))
 import Data.Function (($), (.))
 import Data.Functor (fmap)
 import Data.Maybe (Maybe(Just, Nothing))
+import Data.Monoid ((<>))
+import Data.Proxy(Proxy)
 import Data.Set (Set)
+import Data.String (String)
 import Data.Text.Lazy.Encoding (encodeUtf8)
 import Data.Text (Text, pack)
+import Data.Time.Format (formatTime, rfc822DateFormat, defaultTimeLocale)
 import Data.Typeable (Typeable)
+import Data.Vector (toList)
 import Network.HTTP.Media ((//))
 import Network.URI (URI)
 import Servant.API ((:>), Get)
@@ -30,18 +41,16 @@ import Servant.API.ContentTypes
     , MimeRender(mimeRender)
     , MimeUnrender(mimeUnrender)
     )
-import Servant.Server (Server)
+import Servant.Server (Handler, ServerT)
 import Text.Atom.Feed
     ( EntryContent(HTMLContent)
-    , Entry(entryAuthors, entryContent, entryLinks)
-    , Person(personName)
+    , Entry(entryContent, entryLinks)
     , TextContent(TextString)
     , feedEntries
     , feedLinks
     , nullEntry
     , nullFeed
     , nullLink
-    , nullPerson
     )
 import qualified Text.Atom.Feed as Atom (Feed)
 import Text.Feed.Constructor (feedFromAtom)
@@ -55,7 +64,20 @@ import Text.XML
     , fromXMLElement
     , renderText
     )
+import System.IO (IO)
 
+import qualified Database.Model as DataModel
+    (Feed(Feed, name, url, date, imgUrl))
+import Database.Service (Database, listFeeds)
+
+
+data Context = Context
+    { baseUri :: URI
+    , title :: Text
+    }
+
+type Handler' = Eff [Reader Context, Database, IO, Handler]
+type RestServer api = ServerT api Handler'
 
 maybeToRight :: e -> Maybe a -> Either e a
 maybeToRight _ (Just a) = Right a
@@ -73,6 +95,7 @@ newtype FeedRendererException = FeedRendererException (Set Text)
 instance Exception FeedRendererException
 
 instance MimeRender AtomFeed Feed where
+    mimeRender :: Proxy AtomFeed -> Feed -> ByteString
     mimeRender _ val =
         encodeUtf8 . renderText def . toDocument . fromRight' . fromXMLElement
             $ xmlFeed val
@@ -91,36 +114,39 @@ instance MimeRender AtomFeed Feed where
         fromRight' (Left e) = throw $ FeedRendererException e
 
 instance MimeUnrender AtomFeed Feed where
+    mimeUnrender :: Proxy AtomFeed -> ByteString -> Either String Feed
     mimeUnrender _ bs =
         maybeToRight "Can't parse atom feed!" $ parseFeedSource bs
 
 type RssApi = "atom" :> Get '[AtomFeed] Feed
 
-rssApiHandler :: URI -> Server RssApi
-rssApiHandler baseUrl = pure . feedFromAtom $ fd
-    { feedEntries = fmap toEntry posts
-    , feedLinks = [nullLink "http://example.com/"]
-    }
-  where
-    fd :: Atom.Feed
-    fd = nullFeed
-        (pack $ show baseUrl) -- ID
-        (TextString "Example Website") -- Title
-        "" -- Last updated
+rssApiHandler :: RestServer RssApi
+rssApiHandler = do
+    feeds <- listFeeds
+    context@Context{..}<- ask
 
-    toEntry :: (Text, Text) -> Entry
-    toEntry (url, content) = toEntry'
-        { entryAuthors = [nullPerson {personName = "Pako"}]
-        , entryLinks = [nullLink url]
-        , entryContent = Just (HTMLContent content)
+    pure . feedFromAtom . fd context . toList $ fmap toEntry feeds
+
+  where
+    fd :: Context -> [Entry] -> Atom.Feed
+    fd Context{..} entries = fd'
+        { feedLinks = [nullLink $ showT baseUri]
+        , feedEntries = entries
         }
       where
-        toEntry' = nullEntry
-            url -- The ID field. Must be a link to validate.
-            (TextString content) -- Title "")
-            ""
+        fd' = nullFeed (showT baseUri) (TextString title) ""
 
-    posts =
-        [ ("AHOJ", "asdfasfasfd")
-        , ("BLABLA", "qqqqqqqqqqqqqqqqqqqqqqq")
-        ]
+    toEntry :: DataModel.Feed -> Entry
+    toEntry DataModel.Feed{..} = toEntry'
+        { entryLinks = [nullLink $ showT url]
+        , entryContent = Just . HTMLContent
+            $ "<p><img src=\"" <> showT imgUrl <> "\"></p> <p> New episode: "
+            <> name <> "</p>"
+        }
+      where
+        toEntry' :: Entry
+        toEntry' = nullEntry (showT url) (TextString name)
+            .  pack $ formatTime defaultTimeLocale rfc822DateFormat date
+
+showT :: Show a => a -> Text
+showT = pack . show

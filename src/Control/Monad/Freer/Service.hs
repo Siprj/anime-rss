@@ -74,6 +74,6 @@ runServiceEffect (ServiceChannel chan) = interpret go
         atomically $ writeTChan chan (ChannelContainer (put v) respMVar)
         takeMVar respMVar
 
--- TODO: move this into freer-effects
+-- TODO: Move this into freer-effects!!!
 interpret :: (forall s. eff s -> Eff effs s) -> Eff (eff ': effs) a -> Eff effs a
 interpret f = handleRelay pure (\v f' -> f v >>= f')

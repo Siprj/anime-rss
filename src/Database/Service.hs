@@ -13,16 +13,24 @@
 {-# LANGUAGE TypeOperators #-}
 
 module Database.Service
+    ( Database
+    , addFeedIfUnique
+    , createDatabaseChannel
+    , listFeeds
+    , runDatabase
+    , runDatabaseEffect
+    )
   where
 
 import Control.Monad ((>>=), (>>))
-import Control.Monad.Freer (Eff, Member)
+import Control.Monad.Freer (Eff, Member, send)
 import Data.Acid (AcidState)
-import Data.Function (($))
+import Data.Function (($), (.))
 import Data.Vector (Vector)
 import System.IO (IO)
 
-import Database.Model (DataModel, Feed, SetFeed, listFeeds, addFeedIfUnique)
+import Database.Model (DataModel, Feed, SetFeed)
+import qualified Database.Model as DataModel(listFeeds, addFeedIfUnique)
 import Control.Monad.Freer.Service
     ( IscCall(ChannelData, get, put)
     , ServiceChannel
@@ -36,6 +44,12 @@ data Database s where
     AddFeedIfUnique :: SetFeed -> Database ()
     ListFeeds :: Database (Vector Feed)
 
+addFeedIfUnique :: Member Database effs => SetFeed -> Eff effs ()
+addFeedIfUnique = send . AddFeedIfUnique
+
+listFeeds :: Member Database effs => Eff effs (Vector Feed)
+listFeeds = send ListFeeds
+
 instance IscCall Database where
     data ChannelData Database a = WrapDatabase (Database a)
 
@@ -47,8 +61,8 @@ instance IscCall Database where
 
 processDatabase :: AcidState DataModel -> (a -> IO ()) -> Database a -> IO ()
 processDatabase state return' = \case
-    AddFeedIfUnique v -> addFeedIfUnique state v >> return' ()
-    ListFeeds -> listFeeds state >>= return'
+    AddFeedIfUnique v -> DataModel.addFeedIfUnique state v >> return' ()
+    ListFeeds -> DataModel.listFeeds state >>= return'
 
 createDatabaseChannel :: IO (ServiceChannel Database)
 createDatabaseChannel = createServiceChannel

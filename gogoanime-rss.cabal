@@ -87,6 +87,9 @@ executable gogoanime-rss
   build-depends:
       base
 
+    , acid-state
+    , freer-effects
+    , network-uri
     , servant-server
     , wai
     , warp
