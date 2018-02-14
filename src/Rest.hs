@@ -30,7 +30,12 @@ import Data.Set (Set)
 import Data.String (String)
 import Data.Text.Lazy.Encoding (encodeUtf8)
 import Data.Text (Text, pack)
-import Data.Time.Format (formatTime, rfc822DateFormat, defaultTimeLocale)
+import Data.Time
+    ( UTCTime
+    , defaultTimeLocale
+    , formatTime
+    , rfc822DateFormat
+    )
 import Data.Typeable (Typeable)
 import Data.Vector (toList)
 import Network.HTTP.Media ((//))
@@ -43,9 +48,8 @@ import Servant.API.ContentTypes
     )
 import Servant.Server (Handler, ServerT)
 import Text.Atom.Feed
-    ( EntryContent(HTMLContent)
-    , Entry(entryContent, entryLinks)
-    , TextContent(TextString)
+    ( Entry(entryLinks, entrySummary)
+    , TextContent(TextString, HTMLString)
     , feedEntries
     , feedLinks
     , nullEntry
@@ -122,26 +126,29 @@ type RssApi = "atom" :> Get '[AtomFeed] Feed
 
 rssApiHandler :: RestServer RssApi
 rssApiHandler = do
-    feeds <- listFeeds
-    context@Context{..}<- ask
+    (feeds, lastModification) <- listFeeds
+    context@Context{..} <- ask
 
-    pure . feedFromAtom . fd context . toList $ fmap toEntry feeds
+    pure . feedFromAtom . fd context lastModification
+        . toList $ fmap toEntry feeds
 
   where
-    fd :: Context -> [Entry] -> Atom.Feed
-    fd Context{..} entries = fd'
+    fd :: Context -> UTCTime -> [Entry] -> Atom.Feed
+    fd Context{..} date entries = fd'
         { feedLinks = [nullLink $ showT baseUri]
         , feedEntries = entries
         }
       where
-        fd' = nullFeed (showT baseUri) (TextString title) ""
+        fd' = nullFeed (showT baseUri) (TextString title) . pack
+            $ formatTime defaultTimeLocale rfc822DateFormat date
 
     toEntry :: DataModel.Feed -> Entry
     toEntry DataModel.Feed{..} = toEntry'
         { entryLinks = [nullLink $ showT url]
-        , entryContent = Just . HTMLContent
-            $ "<p><img src=\"" <> showT imgUrl <> "\"></p> <p> New episode: "
-            <> name <> "</p>"
+        , entrySummary = Just . HTMLString
+        -- TODO: Use some HTML template language
+            $ "<div><a href=\"" <> showT url <> ">\"<img src=\"" <> showT imgUrl
+            <> "\"></div>"
         }
       where
         toEntry' :: Entry

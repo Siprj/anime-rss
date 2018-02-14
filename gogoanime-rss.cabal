@@ -30,8 +30,9 @@ library
       Database.OrphanInstances
       Database.Service
       Network.URI.Static
-      Parser.Gogoanime
-      Parser.Type
+      Scraper.Parser.Gogoanime
+      Scraper.Parser.Type
+      Scraper.Service
       Rest
 
   build-depends:

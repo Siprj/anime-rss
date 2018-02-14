@@ -11,31 +11,32 @@ module Main
 
 import Control.Concurrent (forkIO)
 import Control.Monad ((>>=))
-import Control.Monad.Freer (runM, send, runNat)
 import Control.Monad.Freer.Internal (Eff(E, Val))
 import Control.Monad.Freer.Reader (runReader)
+import Control.Monad.Freer (runM, send, runNat)
+import Control.Monad.IO.Class (liftIO)
 import Data.Acid (openLocalState)
 import Database.Model (defaultDataModel)
-import Data.Function (($), (.))
 import Database.Service
     ( Database
     , createDatabaseChannel
     , runDatabase
     , runDatabaseEffect
     )
+import Data.Function (($), (.))
 import Data.Proxy (Proxy(Proxy))
 import Network.URI (URI)
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp (run)
-import Parser.Gogoanime (getEntrisFromFronPage, gogoanimeUrl)
 import Rest (RssApi, Context(Context, baseUri, title), rssApiHandler)
 import Servant.Server (Handler, serve, hoistServer)
-import Control.Monad.IO.Class (liftIO)
 import System.IO (IO, print)
 
 import Control.Monad.Freer.Service (ServiceChannel)
 import Database.Service (Database)
 import Network.URI.Static (staticURI)
+import Scraper.Parser.Gogoanime (getEntrisFromFronPage, gogoanimeUrl)
+import Scraper.Service (runScraper)
 
 baseUrl :: URI
 baseUrl = $$(staticURI "https://ww1.gogoanime.io/")
@@ -47,6 +48,7 @@ main = do
     forkIO $ runDatabase dataModel databaseChan
 
     getEntrisFromFronPage gogoanimeUrl >>= print
+    forkIO $ runScraper' databaseChan
     run 8081 (restApp databaseChan)
   where
 
@@ -64,6 +66,9 @@ main = do
     nat databaseChan eff =
         runM . intLiftIO . runDatabaseEffect databaseChan
         $ runReader eff (Context baseUrl "pokus")
+
+    runScraper' databaseChan =
+        runM . runDatabaseEffect databaseChan $ runScraper 1000000000
 
 intLiftIO :: Eff '[IO, Handler] r -> Eff '[Handler] r
 intLiftIO = runNat (liftIO :: IO a -> Handler a)

@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Parser.Gogoanime
+module Scraper.Parser.Gogoanime
     ( getEntrisFromFronPage
     , gogoanimeUrl
     )
@@ -18,7 +18,8 @@ import Control.Monad ((>>=))
 import Data.ByteString.Lazy.Char8 (unpack)
 import Data.Function (($), (.))
 import Data.Maybe (fromJust, isJust)
-import Network.URI (URI, parseRelativeReference, relativeTo)
+import Data.Text (pack)
+import Network.URI (URI, parseRelativeReference, relativeTo, parseURI)
 import Network.Wreq (get, responseBody)
 import System.IO (IO)
 import Text.HandsomeSoup (css, parseHtml)
@@ -34,7 +35,7 @@ import Text.XML.HXT.Core
     )
 
 import Network.URI.Static (staticURI)
-import Parser.Type (AnimeEntry(AnimeEntry, imageUrl, title, url))
+import Scraper.Parser.Type (AnimeEntry(AnimeEntry, imageUrl, title, url))
 
 
 gogoanimeUrl :: URI
@@ -50,8 +51,9 @@ getEntrisFromFronPage url = do
     parseEntry = proc x -> do
         link <- (getAttrValue "href" >>> arr parseRelativeReference
             >>> isA isJust >>> arr fromJust) -< x
-        title <- getAttrValue "title" -< x
-        imageUrl <- (getChildren >>> hasName "img" >>> getAttrValue "src") -< x
+        title <- getAttrValue "title" >>> arr pack -< x
+        imageUrl <- (getChildren >>> hasName "img" >>> getAttrValue "src"
+            >>> arr parseURI >>> isA isJust >>> arr fromJust) -< x
         returnA -< AnimeEntry
             { url = link `relativeTo` url
             , title

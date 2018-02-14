@@ -1,17 +1,17 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Parser.Type
+module Scraper.Parser.Type
     ( AnimeEntry(..)
     )
   where
 
-import Data.String (String)
+import Data.Text (Text)
 import Network.URI (URI)
 import Text.Show (Show)
 
 data AnimeEntry = AnimeEntry
-    { title :: String
+    { title :: Text
     , url :: URI
-    , imageUrl :: String
+    , imageUrl :: URI
     }
   deriving (Show)

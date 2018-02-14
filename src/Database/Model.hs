@@ -21,14 +21,19 @@ import Control.Applicative (pure)
 import Control.Monad.Reader (ask)
 import Control.Monad.State (get, put)
 import Data.Acid (AcidState, Query, Update, makeAcidic, query, update)
+import Data.Bool (Bool(False))
 import Data.Data (Data)
 import Data.Eq ((==), Eq)
 import Data.Function (($), (.), const)
-import Data.Maybe (maybe)
+import Data.Maybe (fromJust, maybe)
 import Data.SafeCopy (base, deriveSafeCopy)
 import Data.Text (Text)
-import Data.Time.Clock (getCurrentTime)
-import Data.Time (UTCTime)
+import Data.Time
+    ( UTCTime
+    , defaultTimeLocale
+    , getCurrentTime
+    , parseTimeM
+    )
 import Data.Typeable (Typeable)
 import Data.Vector (Vector, cons, find, fromList)
 import GHC.Generics (Generic)
@@ -39,10 +44,16 @@ import Text.Show (Show)
 import Database.OrphanInstances ()
 
 
-newtype DataModel = DataModel (Vector Feed)
+data DataModel = DataModel
+    { feeds :: Vector Feed
+    , lastModification :: UTCTime
+    }
+
+defaultTime :: UTCTime
+defaultTime = fromJust $ parseTimeM False defaultTimeLocale "%s" "0"
 
 defaultDataModel :: DataModel
-defaultDataModel = DataModel $ fromList []
+defaultDataModel = DataModel (fromList []) defaultTime
 
 data Feed = Feed
     { name :: Text
@@ -65,12 +76,15 @@ $(deriveSafeCopy 0 'base ''SetFeed)
 
 addFeedIfUnique' :: SetFeed -> UTCTime -> Update DataModel ()
 addFeedIfUnique' SetFeed{..} date = do
-    DataModel feedVector <- get
-    maybe (prependFeed feedVector) (pure . const ())
-        $ find compareFeeds feedVector
+    DataModel{..} <- get
+    maybe (prependFeed feeds) (pure . const ())
+        $ find compareFeeds feeds
   where
     prependFeed :: Vector Feed -> Update DataModel ()
-    prependFeed feedVector = put . DataModel $ cons buildFeed feedVector
+    prependFeed feedVector = put $ DataModel
+        { feeds = cons buildFeed feedVector
+        , lastModification = date
+        }
     buildFeed = Feed
         { name = setFeedName
         , url = setFeedUrl
@@ -79,10 +93,10 @@ addFeedIfUnique' SetFeed{..} date = do
         }
     compareFeeds Feed{url} = setFeedUrl == url
 
-listFeeds' :: Query DataModel (Vector Feed)
+listFeeds' :: Query DataModel (Vector Feed, UTCTime)
 listFeeds' = do
-    DataModel feedVector <- ask
-    pure feedVector
+    DataModel{..} <- ask
+    pure (feeds, lastModification)
 
 $(makeAcidic ''DataModel ['addFeedIfUnique', 'listFeeds'])
 
@@ -91,5 +105,5 @@ addFeedIfUnique state feed = do
     now <- getCurrentTime
     update state (AddFeedIfUnique' feed now)
 
-listFeeds :: AcidState DataModel -> IO (Vector Feed)
+listFeeds :: AcidState DataModel -> IO (Vector Feed, UTCTime)
 listFeeds state = query state ListFeeds'

@@ -27,6 +27,7 @@ import Control.Monad.Freer (Eff, Member, send)
 import Data.Acid (AcidState)
 import Data.Function (($), (.))
 import Data.Vector (Vector)
+import Data.Time (UTCTime)
 import System.IO (IO)
 
 import Database.Model (DataModel, Feed, SetFeed)
@@ -42,12 +43,12 @@ import Control.Monad.Freer.Service
 
 data Database s where
     AddFeedIfUnique :: SetFeed -> Database ()
-    ListFeeds :: Database (Vector Feed)
+    ListFeeds :: Database (Vector Feed, UTCTime)
 
 addFeedIfUnique :: Member Database effs => SetFeed -> Eff effs ()
 addFeedIfUnique = send . AddFeedIfUnique
 
-listFeeds :: Member Database effs => Eff effs (Vector Feed)
+listFeeds :: Member Database effs => Eff effs (Vector Feed, UTCTime)
 listFeeds = send ListFeeds
 
 instance IscCall Database where
