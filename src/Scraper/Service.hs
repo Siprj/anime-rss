@@ -24,10 +24,19 @@ import Data.Function (($), (.))
 import Data.Int (Int)
 import System.IO (IO)
 
-import Database.Model (SetFeed(SetFeed, setFeedName, setFeedUrl, setFeedImgUrl))
+import Database.Model
+    ( SetFeed
+        ( SetFeed
+        , setFeedName
+        , setFeedUrl
+        , setFeedImgUrl
+        , setFeedEpisodeNumber
+        )
+    )
 import Database.Service (Database, addFeedIfUnique)
 import Scraper.Parser.Gogoanime (getEntrisFromFronPage, gogoanimeUrl)
-import Scraper.Parser.Type (AnimeEntry(AnimeEntry, title, url, imageUrl))
+import Scraper.Parser.Type
+    (AnimeEntry(AnimeEntry, title, url, imageUrl, episodeNumber))
 
 
 runScraper :: Int -> Eff [Database, IO] ()
@@ -41,4 +50,5 @@ runScraper time = do
         { setFeedName = title
         , setFeedUrl = url
         , setFeedImgUrl = imageUrl
+        , setFeedEpisodeNumber = episodeNumber
         }

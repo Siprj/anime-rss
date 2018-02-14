@@ -25,8 +25,14 @@ import Data.Bool (Bool(False))
 import Data.Data (Data)
 import Data.Eq ((==), Eq)
 import Data.Function (($), (.), const)
+import Data.Int (Int)
 import Data.Maybe (fromJust, maybe)
-import Data.SafeCopy (base, deriveSafeCopy)
+import Data.SafeCopy
+    ( Migrate(MigrateFrom, migrate)
+    , base
+    , deriveSafeCopy
+    , extension
+    )
 import Data.Text (Text)
 import Data.Time
     ( UTCTime
@@ -55,24 +61,61 @@ defaultTime = fromJust $ parseTimeM False defaultTimeLocale "%s" "0"
 defaultDataModel :: DataModel
 defaultDataModel = DataModel (fromList []) defaultTime
 
+data Feed_v0 = Feed_v0
+    { name_v0 :: Text
+    , url_v0 :: URI
+    , date_v0 :: UTCTime
+    , imgUrl_v0 :: URI
+    }
+  deriving (Eq, Typeable, Generic, Data, Show)
+
 data Feed = Feed
     { name :: Text
     , url :: URI
     , date :: UTCTime
     , imgUrl :: URI
+    , episodeNumber :: Int
     }
   deriving (Eq, Typeable, Generic, Data, Show)
 
-$(deriveSafeCopy 0 'base ''Feed)
+instance Migrate Feed where
+    type MigrateFrom Feed = Feed_v0
+    migrate Feed_v0{..} = Feed
+        { name = name_v0
+        , url = url_v0
+        , imgUrl = imgUrl_v0
+        , date = date_v0
+        , episodeNumber = 0
+        }
+
+$(deriveSafeCopy 0 'base ''Feed_v0)
+$(deriveSafeCopy 1 'extension ''Feed)
 $(deriveSafeCopy 0 'base ''DataModel)
+
+data SetFeed_v0 = SetFeed_v0
+    { setFeedName_v0 :: Text
+    , setFeedUrl_v0 :: URI
+    , setFeedImgUrl_v0 :: URI
+    }
 
 data SetFeed = SetFeed
     { setFeedName :: Text
     , setFeedUrl :: URI
     , setFeedImgUrl :: URI
+    , setFeedEpisodeNumber :: Int
     }
 
-$(deriveSafeCopy 0 'base ''SetFeed)
+instance Migrate SetFeed where
+    type MigrateFrom SetFeed = SetFeed_v0
+    migrate SetFeed_v0{..} = SetFeed
+        { setFeedName = setFeedName_v0
+        , setFeedUrl = setFeedUrl_v0
+        , setFeedImgUrl = setFeedImgUrl_v0
+        , setFeedEpisodeNumber = 0
+        }
+
+$(deriveSafeCopy 0 'base ''SetFeed_v0)
+$(deriveSafeCopy 1 'extension ''SetFeed)
 
 addFeedIfUnique' :: SetFeed -> UTCTime -> Update DataModel ()
 addFeedIfUnique' SetFeed{..} date = do
@@ -90,6 +133,7 @@ addFeedIfUnique' SetFeed{..} date = do
         , url = setFeedUrl
         , date
         , imgUrl = setFeedImgUrl
+        , episodeNumber = setFeedEpisodeNumber
         }
     compareFeeds Feed{url} = setFeedUrl == url
 

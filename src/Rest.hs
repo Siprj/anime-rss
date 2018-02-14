@@ -71,7 +71,7 @@ import Text.XML
 import System.IO (IO)
 
 import qualified Database.Model as DataModel
-    (Feed(Feed, name, url, date, imgUrl))
+    (Feed(Feed, name, url, date, imgUrl, episodeNumber))
 import Database.Service (Database, listFeeds)
 
 
@@ -139,7 +139,7 @@ rssApiHandler = do
         , feedEntries = entries
         }
       where
-        fd' = nullFeed (showT baseUri) (TextString title) . pack
+          fd' = nullFeed (showT baseUri) (TextString title) . pack
             $ formatTime defaultTimeLocale rfc822DateFormat date
 
     toEntry :: DataModel.Feed -> Entry
@@ -152,7 +152,8 @@ rssApiHandler = do
         }
       where
         toEntry' :: Entry
-        toEntry' = nullEntry (showT url) (TextString name)
+        toEntry' = nullEntry (showT url)
+            (TextString $ name <> " [Episode: " <> showT episodeNumber <> "]")
             .  pack $ formatTime defaultTimeLocale rfc822DateFormat date
 
 showT :: Show a => a -> Text
