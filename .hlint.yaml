@@ -8,7 +8,22 @@
 
 # Specify additional command line arguments
 #
-- arguments: [src/Rest.hs, app]
+- arguments:
+    [ app/Main/Configuration.hs
+    , src/Rest.hs
+    , src/Scraper/Parser/Type.hs
+    , src/Scraper/Service.hs
+    , src/Rest.hs
+    , src/Control/Monad/Freer/Service.hs
+    , src/DataModel/Acid/Feed.hs
+    , src/DataModel/Acid.hs
+    , src/DataModel/OrphanInstances.hs
+    , src/DataModel/Service.hs
+    , src/DataModel/Service/Feed.hs
+    , src/DataModel/Type/Feed.hs
+    , src/DataModel/Type/DataModel.hs
+    , src/DataModel/Type/Old/Feed.hs
+    ]
 
 
 # Control which extensions/flags/modules/functions can be used
