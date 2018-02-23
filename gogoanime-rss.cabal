@@ -26,14 +26,19 @@ library
   hs-source-dirs:      src
   exposed-modules:
       Control.Monad.Freer.Service
-      Database.Model
-      Database.OrphanInstances
-      Database.Service
+      DataModel.Acid
+      DataModel.Acid.Feed
+      DataModel.OrphanInstances
+      DataModel.Service
+      DataModel.Service.Feed
+      DataModel.Type.DataModel
+      DataModel.Type.Feed
+      DataModel.Type.Old.Feed
       Network.URI.Static
+      Rest
       Scraper.Parser.Gogoanime
       Scraper.Parser.Type
       Scraper.Service
-      Rest
 
   build-depends:
       base >= 4.7 && < 5

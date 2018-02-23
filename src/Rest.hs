@@ -23,7 +23,7 @@ import Data.Default(def)
 import Data.Either (Either(Right, Left))
 import Data.Function (($), (.))
 import Data.Functor (fmap)
-import Data.Maybe (Maybe(Just, Nothing))
+import Data.Maybe (Maybe(Just, Nothing), maybe)
 import Data.Monoid ((<>))
 import Data.Proxy(Proxy)
 import Data.Set (Set)
@@ -70,9 +70,9 @@ import Text.XML
     )
 import System.IO (IO)
 
-import qualified Database.Model as DataModel
+import qualified DataModel.Type.Feed as DataModel
     (Feed(Feed, name, url, date, imgUrl, episodeNumber))
-import Database.Service (Database, listFeeds)
+import DataModel.Service (DataModel, listFeeds)
 
 
 data Context = Context
@@ -80,7 +80,7 @@ data Context = Context
     , title :: Text
     }
 
-type Handler' = Eff [Reader Context, Database, IO, Handler]
+type Handler' = Eff [Reader Context, DataModel, IO, Handler]
 type RestServer api = ServerT api Handler'
 
 maybeToRight :: e -> Maybe a -> Either e a
@@ -133,14 +133,14 @@ rssApiHandler = do
         . toList $ fmap toEntry feeds
 
   where
-    fd :: Context -> UTCTime -> [Entry] -> Atom.Feed
+    fd :: Context -> Maybe UTCTime -> [Entry] -> Atom.Feed
     fd Context{..} date entries = fd'
         { feedLinks = [nullLink $ showT baseUri]
         , feedEntries = entries
         }
       where
           fd' = nullFeed (showT baseUri) (TextString title) . pack
-            $ formatTime defaultTimeLocale rfc822DateFormat date
+            $ maybe "" (formatTime defaultTimeLocale rfc822DateFormat) date
 
     toEntry :: DataModel.Feed -> Entry
     toEntry DataModel.Feed{..} = toEntry'

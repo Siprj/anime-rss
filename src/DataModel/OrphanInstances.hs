@@ -3,7 +3,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Database.OrphanInstances
+module DataModel.OrphanInstances
     ()
   where
 

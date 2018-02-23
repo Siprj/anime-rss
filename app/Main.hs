@@ -16,13 +16,6 @@ import Control.Monad.Freer.Reader (runReader)
 import Control.Monad.Freer (runM, send, runNat)
 import Control.Monad.IO.Class (liftIO)
 import Data.Acid (openLocalState)
-import Database.Model (defaultDataModel)
-import Database.Service
-    ( Database
-    , createDatabaseChannel
-    , runDatabase
-    , runDatabaseEffect
-    )
 import Data.Function (($), (.))
 import Data.Proxy (Proxy(Proxy))
 import Network.URI (URI)
@@ -33,7 +26,13 @@ import Servant.Server (Handler, serve, hoistServer)
 import System.IO (IO, print)
 
 import Control.Monad.Freer.Service (ServiceChannel)
-import Database.Service (Database)
+import DataModel.Type.DataModel (defaultDataModel)
+import DataModel.Service
+    ( DataModel
+    , createDataModelChannel
+    , runDataModel
+    , runDataModelEffect
+    )
 import Network.URI.Static (staticURI)
 import Scraper.Parser.Gogoanime (getEntrisFromFronPage, gogoanimeUrl)
 import Scraper.Service (runScraper)
@@ -44,8 +43,8 @@ baseUrl = $$(staticURI "https://ww1.gogoanime.io/")
 main :: IO ()
 main = do
     dataModel <- openLocalState defaultDataModel
-    databaseChan <- createDatabaseChannel
-    forkIO $ runDatabase dataModel databaseChan
+    databaseChan <- createDataModelChannel
+    forkIO $ runDataModel dataModel databaseChan
 
     getEntrisFromFronPage gogoanimeUrl >>= print
     forkIO $ runScraper' databaseChan
@@ -55,7 +54,7 @@ main = do
     -- 'serve' comes from servant and hands you a WAI Application,
     -- which you can think of as an "abstract" web application,
     -- not yet a webserver.
-    restApp :: ServiceChannel Database -> Application
+    restApp :: ServiceChannel DataModel -> Application
     restApp databaseChan = serve restAPI (mainServer databaseChan)
 
     restAPI :: Proxy RssApi
@@ -64,11 +63,11 @@ main = do
     mainServer databaseChan =
         hoistServer restAPI (nat databaseChan) rssApiHandler
     nat databaseChan eff =
-        runM . intLiftIO . runDatabaseEffect databaseChan
+        runM . intLiftIO . runDataModelEffect databaseChan
         $ runReader eff (Context baseUrl "pokus")
 
     runScraper' databaseChan =
-        runM . runDatabaseEffect databaseChan $ runScraper 1000000000
+        runM . runDataModelEffect databaseChan $ runScraper 1000000000
 
 intLiftIO :: Eff '[IO, Handler] r -> Eff '[Handler] r
 intLiftIO = runNat (liftIO :: IO a -> Handler a)

@@ -24,7 +24,7 @@ import Data.Function (($), (.))
 import Data.Int (Int)
 import System.IO (IO)
 
-import Database.Model
+import DataModel.Type.Feed
     ( SetFeed
         ( SetFeed
         , setFeedName
@@ -33,13 +33,13 @@ import Database.Model
         , setFeedEpisodeNumber
         )
     )
-import Database.Service (Database, addFeedIfUnique)
+import DataModel.Service (DataModel, addFeedIfUnique)
 import Scraper.Parser.Gogoanime (getEntrisFromFronPage, gogoanimeUrl)
 import Scraper.Parser.Type
     (AnimeEntry(AnimeEntry, title, url, imageUrl, episodeNumber))
 
 
-runScraper :: Int -> Eff [Database, IO] ()
+runScraper :: Int -> Eff [DataModel, IO] ()
 runScraper time = do
     entries <- send $ getEntrisFromFronPage gogoanimeUrl
     mapM_ (addFeedIfUnique . toSetFeed) entries
