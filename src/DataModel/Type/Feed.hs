@@ -1,3 +1,5 @@
+{-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -10,6 +12,8 @@
 module DataModel.Type.Feed
     ( Feed(..)
     , SetFeed(..)
+    , Feed'(..)
+    , Pokus
     )
   where
 
@@ -22,6 +26,7 @@ import Data.SafeCopy
     , extension
     )
 import Data.Text (Text)
+import Data.Functor.Identity (Identity)
 import Data.Time (UTCTime)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
@@ -33,6 +38,9 @@ import DataModel.Type.Old.Feed
     ( Feed_v0(Feed_v0, name_v0, url_v0, date_v0, imgUrl_v0)
     , SetFeed_v0(SetFeed_v0, setFeedName_v0, setFeedUrl_v0, setFeedImgUrl_v0)
     )
+
+import DataModel.Type.TH (simplify)
+import qualified DataModel.Type.TH as TH (TypeVariable(Identity, Proxy))
 
 
 data Feed = Feed
@@ -71,5 +79,25 @@ instance Migrate SetFeed where
         , setFeedImgUrl = setFeedImgUrl_v0
         , setFeedEpisodeNumber = 0
         }
+
+data Feed' c a b = Feed'
+    { name :: a Text
+    , url :: c URI
+    , date :: b UTCTime
+    , imgUrl :: a URI
+    , episodeNumber :: a Int
+    }
+
+type Pokus = Feed' Identity
+
+$(simplify ''Feed' [TH.Identity, TH.Proxy] "SetFeed")
+-- $(simplify ''Feed' [TH.Identity, TH.Identity] "GetFeed")
+-- data SetFeed = SetFeed
+--     { name :: Text
+--     , url :: URI
+--     , imgUrl :: URI
+--     , episodeNumber :: Int
+--     }
+
 
 $(deriveSafeCopy 1 'extension ''SetFeed)

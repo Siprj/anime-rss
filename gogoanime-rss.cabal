@@ -33,6 +33,7 @@ library
       DataModel.Service.Feed
       DataModel.Type.DataModel
       DataModel.Type.Feed
+      DataModel.Type.TH
       DataModel.Type.Old.Feed
       Network.URI.Static
       Rest
