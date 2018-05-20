@@ -13,7 +13,8 @@ module DataModel.Type.Feed
     ( Feed(..)
     , SetFeed(..)
     , Feed'(..)
-    , Pokus
+    , Kwa(..)
+    , SetFeed2(Feed'', name, blabla, date, imgUrl, ahoj, episodeNumber)
     )
   where
 
@@ -26,7 +27,6 @@ import Data.SafeCopy
     , extension
     )
 import Data.Text (Text)
-import Data.Functor.Identity (Identity)
 import Data.Time (UTCTime)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
@@ -40,7 +40,7 @@ import DataModel.Type.Old.Feed
     )
 
 import DataModel.Type.TH (simplify)
-import qualified DataModel.Type.TH as TH (TypeVariable(Identity, Proxy))
+import qualified DataModel.Type.TH as TH (TypeVariable(Identity, Proxy, DontModify))
 
 
 data Feed = Feed
@@ -80,17 +80,21 @@ instance Migrate SetFeed where
         , setFeedEpisodeNumber = 0
         }
 
-data Feed' c a b = Feed'
+newtype Kwa a = Kwa a
+
+data Feed' f c a b d e g h = Feed'
     { name :: a Text
     , url :: c URI
+    , blabla :: g h
     , date :: b UTCTime
     , imgUrl :: a URI
+    , ahoj :: Text
     , episodeNumber :: a Int
+    , kwa :: c (Kwa d)
     }
 
-type Pokus = Feed' Identity
 
-$(simplify ''Feed' [TH.Identity, TH.Proxy] "SetFeed")
+$(simplify ''Feed' [TH.DontModify, TH.Proxy, TH.Identity] "SetFeed2")
 -- $(simplify ''Feed' [TH.Identity, TH.Identity] "GetFeed")
 -- data SetFeed = SetFeed
 --     { name :: Text
