@@ -44,8 +44,8 @@ library
   build-depends:
       base >= 4.7 && < 5
 
-    , attoparsec
     , acid-state
+    , attoparsec
     , bytestring
     , containers
     , data-default
@@ -53,14 +53,18 @@ library
     , freer-effects
     , HandsomeSoup
     , http-media
+    , haskell-src-exts
     , hxt
     , hxt-css
     , lens
+    , megaparsec
     , mtl
     , network-uri
+    , parser-combinators
     , safecopy
     , servant
     , servant-server
+    , split
     , stm
     , template-haskell
     , text

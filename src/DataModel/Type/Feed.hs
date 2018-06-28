@@ -8,6 +8,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module DataModel.Type.Feed
     ( Feed(..)
@@ -93,15 +94,27 @@ data Feed' f c a b d e g h = Feed'
     , kwa :: c (Kwa d)
     }
 
-
 $(simplify ''Feed' [TH.DontModify, TH.Proxy, TH.Identity] "SetFeed2")
--- $(simplify ''Feed' [TH.Identity, TH.Identity] "GetFeed")
--- data SetFeed = SetFeed
---     { name :: Text
---     , url :: URI
---     , imgUrl :: URI
---     , episodeNumber :: Int
---     }
 
+[generate|
+    data Ahojda a b c = Ahojda
+        ahoj1 :: a Text
+        ahoj2 :: b Int
+        ahoj3 :: c URI
+        ahoj4 :: (Maybe Text)
+      deriving Show Read Eq
+~~~
+    alias Ahojda Maybe Identity : Ahojda => GetAhojda | Pokus
+
+    conversion setAhojdaToGetAhojda = SetAhojda -> GetAhojda
+    conversion getAhojdaToSetAhojda = GetAhojda -> SetAhojda
+|]
+
+data Kwa a b c = Kwa
+    { kwa1 :: a Int
+    , kwa2 :: b Text
+    , kwa3 :: c URI
+    }
+  deriving(Eq, Show, Read)
 
 $(deriveSafeCopy 1 'extension ''SetFeed)
