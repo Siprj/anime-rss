@@ -1,5 +1,5 @@
 flags:
-  gogoanime-rss: {pedantic: true}
+  gogoanime-rss: {pedantic: false}
 
 extra-package-dbs: []
 

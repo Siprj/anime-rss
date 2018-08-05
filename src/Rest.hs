@@ -16,11 +16,12 @@ module Rest
 
 import Control.Applicative (pure)
 import Control.Exception (Exception, throw)
+import Control.Monad (Monad)
 import Control.Monad.Freer (Eff)
 import Control.Monad.Freer.Reader (Reader, ask)
 import Data.ByteString.Lazy (ByteString)
 import Data.Default(def)
-import Data.Either (Either(Right, Left))
+import Data.Either
 import Data.Function (($), (.))
 import Data.Functor (fmap)
 import Data.Maybe (Maybe(Just, Nothing), maybe)

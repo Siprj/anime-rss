@@ -1,58 +1,102 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP #-}
 
 module DataModel.Type.TH where
+#ifndef TEST
 --    ( simplify
 --    , TypeVariable(..)
 --    )
 --  where
+#endif
 
 import Prelude (error)
 
-import Data.Data (Data)
-import GHC.Generics (Generic)
-import Data.Typeable (Typeable)
-import Control.Applicative ((<$>), (<*>), (<|>), (*>), pure)
 import Control.Applicative.Combinators (manyTill, sepBy1, many)
-import Control.Monad ((>>), mapM_, when)
+import Control.Applicative ((<$>), (<*>), (<|>), (<*), (*>), pure)
+import Control.Lens.Setter (over)
+import Control.Lens.Tuple (_1)
+import Control.Monad ((>>), mapM, mapM_, when, fail)
+import Data.Data (Data)
+import Data.Either (Either(Left, Right), either)
 import Data.Eq (Eq, (==))
 import Data.Foldable (find, length)
 import Data.Function ((.), ($))
 import Data.Functor (fmap, void)
-import Data.List (repeat, zip)
-import Data.Maybe (Maybe, maybe, isJust)
+import Data.List (repeat, zip, unzip, reverse, take, lookup)
+import Data.Maybe (Maybe(Just, Nothing), maybe, isJust, catMaybes)
 import Data.Monoid ((<>), mconcat)
 import Data.Ord ((<))
 import Data.String (String)
-import Data.Void (Void)
+import Data.Text.Lazy (unpack)
+import Data.Text.Lazy.IO (writeFile)
 import Data.Tuple (fst)
+import Data.Typeable (Typeable)
+import Data.Traversable (sequence)
+import Data.Void (Void)
+import GHC.Generics (Generic)
 import Language.Haskell.Exts.Parser
     (ParseResult(ParseOk, ParseFailed), parseDecl)
+import Language.Haskell.Exts.Pretty (prettyPrint)
+import Language.Haskell.Exts.Syntax
+    ( ConDecl(ConDecl, InfixConDecl, RecDecl)
+    , Context
+    , Decl(DataDecl), DataOrNew(DataType)
+    , DeclHead(DHead, DHInfix, DHParen, DHApp)
+    , QualConDecl(QualConDecl)
+    , TyVarBind(UnkindedVar, KindedVar)
+    , Type
+        ( TyApp
+        , TyBang
+        , TyCon
+        , TyEquals
+        , TyForall
+        , TyFun
+        , TyInfix
+        , TyKind
+        , TyList
+        , TyParArray
+        , TyParen
+        , TyPromoted
+        , TyQuasiQuote
+        , TySplice
+        , TyTuple
+        , TyUnboxedSum
+        , TyVar
+        , TyWildCard
+        )
+    , QName(UnQual, Qual, Special)
+    , FieldDecl(FieldDecl)
+    )
+import qualified Language.Haskell.Exts.Syntax as Exts (Name(Ident, Symbol))
 import qualified Language.Haskell.TH as TH (Name)
 import Language.Haskell.TH
     ( Con(NormalC, RecC, InfixC, ForallC, GadtC, RecGadtC)
     , Dec(DataD)
     , Info(TyConI)
     , Q
-    , Type(VarT, AppT, ArrowT, StarT, ConT)
     , TyVarBndr(KindedTV, PlainTV)
+    , mkName
+    , nameBase
+    , newName
+    , pprint
     , reify
     , reportError
     , runIO
-    , mkName
-    , newName
-    , nameBase
-    , pprint
     )
+import qualified Language.Haskell.TH as TH
+    (Type(VarT, AppT, ArrowT, StarT, ConT))
 import Language.Haskell.TH.Quote
     ( QuasiQuoter
         (QuasiQuoter, quoteExp, quotePat, quoteType, quoteDec)
@@ -61,11 +105,8 @@ import Language.Haskell.TH.Syntax
     ( BangType
     , VarBangType
     )
-import System.IO (writeFile)
-import Text.Show (Show, show)
-import Text.Megaparsec (Parsec, try)
 import Text.Megaparsec.Char
-    (anyChar, eol, lowerChar, upperChar, space1, alphaNumChar)
+    (anyChar, lowerChar, upperChar, space1, alphaNumChar)
 import qualified Text.Megaparsec.Char.Lexer as L
     ( skipBlockComment
     , skipLineComment
@@ -73,17 +114,16 @@ import qualified Text.Megaparsec.Char.Lexer as L
     , lexeme
     , space
     )
+import Text.Megaparsec (Parsec, try, parseErrorPretty', parse)
+import Text.Pretty.Simple (pShow)
+import Text.Show (Show, show)
 
-
-data TypeVariable = Identity | Proxy | Maybe | DontModify
-  deriving (Eq, Typeable, Generic, Data, Show)
 
 -- DataD Cxt Name [TyVarBndr] (Maybe Kind) [Con] [DerivClause]
 
 simplify :: TH.Name -> [TypeVariable] -> String -> Q [Dec]
 simplify baseTypeName substitutions newTypeName = do
     baseType <- reify baseTypeName
-    runIO . writeFile "/tmp/pokus" $ show baseType
     case baseType of
         TyConI (DataD cxt _ typeVariabls kind constructors derivings) -> do
             when (isJust kind) $ reportError
@@ -112,7 +152,7 @@ simplify baseTypeName substitutions newTypeName = do
     checkKinds ((_, typeVarBndr):xs) = case typeVarBndr of
         PlainTV _ -> checkKinds xs
         -- Represents kind * -> *
-        KindedTV _ (AppT (AppT ArrowT StarT) StarT) -> checkKinds xs
+        KindedTV _ (TH.AppT (TH.AppT TH.ArrowT TH.StarT) TH.StarT) -> checkKinds xs
         KindedTV name kind -> reportError $ "Type variable: " <> pprint name
             <> " has kind: " <> pprint kind
             <> "\n Expected kind is: * -> *."
@@ -142,45 +182,52 @@ simplify baseTypeName substitutions newTypeName = do
     convertConstructor (NormalC name subs) typeVarPairs =
         NormalC (mkName $ nameBase name <> "'") . mconcat $ fmap converSub subs --
       where
-        converSub orig@(bang, AppT (VarT varTName) rest) =
+        converSub orig@(bang, TH.AppT (TH.VarT varTName) rest) =
             maybe [orig] modifyTypeVar $ findTypeVarInPairs varTName typeVarPairs
           where
             modifyTypeVar :: TypeVariable -> [BangType]
             modifyTypeVar Identity = [(bang, rest)]
             modifyTypeVar Proxy = []
-            modifyTypeVar Maybe = [(bang, AppT (ConT $ mkName "Maybe") rest)]
+            modifyTypeVar Maybe = [(bang, TH.AppT (TH.ConT $ mkName "Maybe") rest)]
             modifyTypeVar DontModify = [orig]
         converSub x = [x]
 
     convertConstructor (RecC name records) typeVarPairs =
         RecC (mkName $ nameBase name <> "'") . mconcat $ fmap converSub records
       where
-        converSub orig@(recName, bang, AppT (VarT varTName) rest) =
+        converSub orig@(recName, bang, TH.AppT (TH.VarT varTName) rest) =
             maybe [orig] modifyTypeVar $ findTypeVarInPairs varTName typeVarPairs
           where
             modifyTypeVar :: TypeVariable -> [VarBangType]
             modifyTypeVar Identity = [(recName, bang, rest)]
             modifyTypeVar Proxy = []
-            modifyTypeVar Maybe = [(recName, bang, AppT (ConT $ mkName "Maybe") rest)]
+            modifyTypeVar Maybe = [(recName, bang, TH.AppT (TH.ConT $ mkName "Maybe") rest)]
             modifyTypeVar DontModify = [orig]
         converSub x = [x]
     convertConstructor constructor _ = constructor
 
 type Name = String
-type Asts = [Ast]
 type Constructor = (Name, Name)
 
-data Ast
-    = Alias
-        { name :: Name
-        , typeVariables :: [TypeVariable]
-        , constructorMapping :: [Constructor]
-        }
-    | Conversion
-        { name :: Name
-        , from :: Name
-        , to :: Name
-        }
+data TypeVariable = Identity | Proxy | Maybe | DontModify
+  deriving (Eq, Typeable, Generic, Data, Show)
+
+data Alias = Alias
+    { name :: Name
+    , typeVariables :: [TypeVariable]
+    , constructorMapping :: [Constructor]
+    }
+
+data Conversion = Conversion
+    { name :: Name
+    , from :: Name
+    , to :: Name
+    }
+
+data Ast = Ast
+    { aliases :: [Alias]
+    , conversions :: [Conversion]
+    }
 
 type Parser = Parsec Void String
 
@@ -215,7 +262,10 @@ thickArrow :: Parser String
 thickArrow = symbol "=>"
 
 delimiter :: Parser String
-delimiter = symbol "~~~" >> eol
+delimiter = symbol "~~~"
+
+equal :: Parser String
+equal = symbol "="
 
 reservedWords :: [String]
 reservedWords =
@@ -247,20 +297,32 @@ parseTypeVariable = (try (symbol "Identity") >> pure Identity)
     <|> (try (symbol "Maybe") >> pure Maybe)
     <|> (try (symbol "DontModify") >> pure DontModify)
 
-parseAlias :: Parser Ast
+parseAlias :: Parser Alias
 parseAlias = alias >> Alias
     <$> upperName
     <*> manyTill parseTypeVariable colon
     <*> parserConstructors
 
-parseConversion :: Parser Ast
+parseConversion :: Parser Conversion
 parseConversion = conversion >> Conversion
-    <$> lowerName
+    <$> (lowerName <* equal)
     <*> upperName
-    <*> (arrow *> upperName )
+    <*> (arrow *> upperName)
 
-parseAst :: Parser [Ast]
-parseAst = many (parseConversion <|> parseAlias)
+parseAst :: Parser Ast
+parseAst = makeAst . unzip <$> many (parseConversion' <|> parseAlias')
+  where
+    parseConversion' :: Parser (Maybe Alias, Maybe Conversion)
+    parseConversion' = do
+        v <- parseConversion
+        pure (Nothing, Just v)
+
+    parseAlias' :: Parser (Maybe Alias, Maybe Conversion)
+    parseAlias' = do
+        v <- parseAlias
+        pure (Just v, Nothing)
+
+    makeAst (a, b) = Ast (catMaybes a) (catMaybes b)
 
 splitToHaskellStringAndAST :: Parser (String, Ast)
 splitToHaskellStringAndAST = do
@@ -268,28 +330,259 @@ splitToHaskellStringAndAST = do
     ast <- parseAst
     pure (haskellStr, ast)
 
-quoteExp :: String -> Q Exp
-quoteExp str = do
+quoteDec' :: String -> Q [Dec]
+quoteDec' str = do
     (haskellString, ast) <- either parserFailed pure
         $ parse splitToHaskellStringAndAST "" str
-    decl <- parseDecl haskellString >>= \case
-        ParseFailed loc str -> reportError $ str
-        ParseOk v -> v
+    decl <- failOnError $ parseDecl haskellString
+    runIO . writeFile "/tmp/pokus.txt" $ pShow decl
+    generateDecl decl ast
   where
-    parserFailed = parseErrorPretty' str
+    parserFailed = fail . parseErrorPretty' str
 
-    -- TODO: ....
+    failOnError = \case
+        ParseFailed _loc str' -> fail str'
+        ParseOk v -> do
+            -- reportError . unpack $ pShow v
+            validateDecl v
 
---dataGen' :: String -> Q Exp
---dataGen' str =
+    -- | Ensure that our declaration contains data declaration and fail
+    -- otherwise.
+    validateDecl :: Decl l -> Q (Decl l)
+    validateDecl v@DataDecl{} = pure v
+    validateDecl _ = fail "Only data declaration is supported!"
+
+    generateDecl :: (Show l) => Decl l -> Ast -> Q [Dec]
+    generateDecl (DataDecl _ _ cntx head consts der) Ast{..} = fail "asdf"
+
+myToList :: DeclHead l -> [Exts.Name l]
+myToList decl =  myToList' decl []
+  where
+    myToList' :: DeclHead l -> [Exts.Name l] -> [Exts.Name l]
+    myToList' (DHead _ _) xs = xs
+    myToList' (DHInfix _ typeVar _) xs = toVarName typeVar : xs
+    myToList' (DHParen _ nextDecl) xs = myToList' nextDecl xs
+    myToList' (DHApp _ nextDecl typeVar) xs =
+        myToList' nextDecl $ toVarName typeVar : xs
+
+type TypeVariablePair = (String, TypeVariable)
+
+createNewDeclHead
+    :: forall l
+    . Exts.Name l
+    -> DeclHead l
+    -> [TypeVariable]
+    -> Either String (DeclHead l, [TypeVariablePair])
+createNewDeclHead newName decl typeVariables =
+    createNewDeclHead' decl [] $ reverse typeVariables
+  where
+    createNewDeclHead'
+        :: DeclHead l
+        -> [TypeVariablePair]
+        -> [TypeVariable]
+        -> Either String (DeclHead l, [TypeVariablePair])
+    createNewDeclHead' (DHead l _) ys [] = Right (DHead l newName, ys)
+    createNewDeclHead' (DHead _ _) _ xs =
+        Left $ "Data type have to have same number of type parameters as the"
+            <> " alias. Spare type variables are:\n "
+            <> show (take (length xs) typeVariables)
+    createNewDeclHead' v@DHInfix{} _ _ =
+        Left $ "Infix type variables are not supported:\n" <> prettyPrint v
+    createNewDeclHead' (DHParen l nextDecl) ys xs =
+        fmap (over _1 $ DHParen l) $ createNewDeclHead' nextDecl ys xs
+    createNewDeclHead' DHApp{} _ [] =
+        Left $ "There is surplus of type variable in data declaration: "
+            <> prettyPrint decl
+    createNewDeclHead' (DHApp l nextDecl typeVar) ys (x:xs) =
+        fmap (over _1 $ magic x)
+            $ createNewDeclHead' nextDecl
+            ((nameToStr $ toVarName typeVar, x) : ys) xs
+      where
+        magic :: TypeVariable -> DeclHead l -> DeclHead l
+        magic DontModify v = DHApp l v typeVar
+        magic _ v = v
+
+-- TODO: Right -> pure
+
+createNewConstructors
+    :: forall l
+    . Exts.Name l
+    -> QualConDecl l
+    -> [TypeVariablePair]
+    -> [Constructor]
+    -> Either String (QualConDecl l)
+createNewConstructors newName oldCon typeVarPairList conMappings =
+    QualConDecl (annotation oldCon)
+    <$> modifyTypeVar (typeVars oldCon)
+    <*> Right (context oldCon)
+    <*> newConDecl (conDecl oldCon)
+  where
+    modifyTypeVar :: Maybe [TyVarBind l] -> Either String (Maybe [TyVarBind l])
+    modifyTypeVar tvs = Right tvs
+
+    annotation :: QualConDecl l -> l
+    annotation (QualConDecl l _ _ _) = l
+
+    typeVars :: QualConDecl l -> Maybe [TyVarBind l]
+    typeVars (QualConDecl _ tvs _ _) = tvs
+
+    context :: QualConDecl l -> Maybe (Context l)
+    context (QualConDecl _ _ cntx _) = cntx
+
+    conDecl :: QualConDecl l -> ConDecl l
+    conDecl (QualConDecl _ _ _ cdcl) = cdcl
+
+    -- TODO:
+    -- rmMappedTyVars
+
+    newConDecl :: ConDecl l -> Either String (ConDecl l)
+    newConDecl (ConDecl l name types) = ConDecl l
+        <$> translateName name
+        <*> translateTypes types
+    newConDecl (InfixConDecl _ _ _ _) =
+        Left "Infix data constructor is not supported."
+    newConDecl (RecDecl l name records) = RecDecl l
+        <$> (translateName name)
+        <*> mapM processRecord records
+      where
+        processRecord (FieldDecl l2 names t) =
+            FieldDecl l2 names <$> translateType t
+
+    -- TODO: l type variable to ()
+    translateName :: Exts.Name l -> Either String (Exts.Name l)
+    translateName (Exts.Ident l name) =
+        maybeToEither (nameError name) . fmap (Exts.Ident l)
+        $ lookup name conMappings
+    translateName (Exts.Symbol l name) =
+        maybeToEither (nameError name) . fmap (Exts.Symbol l)
+        $ lookup name conMappings
+
+    nameError name = "Can't find constructor \"" <> name <> "\" in constructor "
+        <> "mapping: " <> show conMappings
+
+--    translateRecords =
+
+    translateTypes :: [Type l] -> Either String [Type l]
+    translateTypes types = sequence $ fmap translateType types
+
+    translateType :: Type l -> Either String (Type l)
+    translateType (TyForall l typeVarBind context' t) =
+        TyForall l typeVarBind context' <$> translateType t
+    translateType (TyFun l t1 t2) =
+        TyFun l <$> translateType t1 <*> translateType t2
+    translateType (TyTuple l boxed ts) =
+        TyTuple l boxed <$> sequence (fmap translateType ts)
+    translateType (TyUnboxedSum l ts) =
+        TyUnboxedSum l <$> sequence (fmap translateType ts)
+    translateType (TyList l t) =
+        TyList l <$> translateType t
+    translateType (TyParArray l t) =
+        TyParArray l <$> translateType t
+    translateType (TyApp l t1 t2) =
+        case classifyLeftSide t1 of
+            Keep -> TyApp l t1 <$> translateType t2
+            Rename -> TyApp l (renameTyVar t2) <$> translateType t2
+            GoDeeper -> TyApp l <$> translateType t1 <*> translateType t2
+            Drop -> translateType t2
+    translateType v@(TyVar _ name) =
+        case lookup (nameToStr name) typeVarPairList of
+            -- TODO: This error message sucks...
+            Just _ -> Left $ "Type variable [" <> prettyPrint name
+                <> "] can't be used as final type."
+            Nothing -> pure v
+    translateType v@TyCon{} = pure v
+    translateType (TyParen l t) = TyParen l <$> translateType t
+    translateType (TyInfix l t1 name t2) =
+        case classifyLeftSide t1 of
+            Keep -> TyInfix l t1 <$> pure name <*> translateType t2
+            Rename -> TyInfix l (renameTyVar t2)
+                <$> pure name
+                <*> translateType t2
+            GoDeeper -> TyInfix l
+                <$> translateType t1
+                <*> pure name
+                <*> translateType t2
+            Drop -> Left $ "Can't drop infix name: " <> prettyPrint name
+    translateType (TyKind l t k) = TyKind l <$> translateType t <*> pure k
+    -- TODO: Promoted types can contain type variables to... This mistake
+    -- is multiple places.
+    -- Let's ignore it for now.
+    translateType v@TyPromoted{} = pure v
+    -- TODO: Not sure about this one... Should it behave the same way as TyApp?
+    translateType (TyEquals l t1 t2) =
+        TyEquals l <$> translateType t1 <*> translateType t2
+    translateType v@TySplice{} = pure v
+    translateType (TyBang l bt us t) = TyBang l bt us <$> translateType t
+    translateType v@TyWildCard{} = pure v
+    translateType v@TyQuasiQuote{} = pure v
+
+    classifyLeftSide :: Type l -> Classification
+    classifyLeftSide TyForall{} = Keep
+    classifyLeftSide TyFun{} = GoDeeper
+    classifyLeftSide TyTuple{} = GoDeeper
+    classifyLeftSide TyUnboxedSum{} = GoDeeper
+    classifyLeftSide (TyList _ t) = classifyLeftSide t
+    classifyLeftSide (TyParArray _ t) = classifyLeftSide t
+    classifyLeftSide TyApp{} = GoDeeper
+    classifyLeftSide (TyVar _ name) =
+        case lookup (nameToStr name) typeVarPairList of
+            Just DontModify -> Keep
+            Just Proxy -> Drop
+            Just Identity -> Rename
+            Just Maybe -> Rename
+            _ -> Keep
+    classifyLeftSide (TyCon _ _) = Keep
+    classifyLeftSide (TyParen _ t) = classifyLeftSide t
+    classifyLeftSide TyInfix{} = GoDeeper
+    classifyLeftSide (TyKind _ t _) = classifyLeftSide t
+    classifyLeftSide (TyPromoted _ _) = Keep
+    classifyLeftSide TyEquals{} = GoDeeper
+    classifyLeftSide (TySplice _ _) = Keep
+    classifyLeftSide (TyBang _ _ _ t) = classifyLeftSide t
+    classifyLeftSide (TyWildCard _ _) = Keep
+    classifyLeftSide TyQuasiQuote{} = Keep
+
+    renameTyVar :: Type l -> Type l
+    renameTyVar (TyList l t) = TyList l $ renameTyVar t
+    renameTyVar (TyParArray l t) = TyParArray l $ renameTyVar t
+    renameTyVar v@(TyVar l name) = maybe v toNewVaule
+        $ lookup (nameToStr name) typeVarPairList
+      where
+        toNewVaule :: TypeVariable -> Type l
+        toNewVaule Identity = TyCon l (UnQual l (Exts.Ident l "Identity"))
+        toNewVaule Maybe = TyCon l (UnQual l (Exts.Ident l "Maybe"))
+        -- TODO: Maybe some error handling.
+        -- Following two cases should never happen...
+        toNewVaule DontModify = v
+        toNewVaule Proxy = v
+    renameTyVar (TyParen l t) = TyParArray l $ renameTyVar t
+    renameTyVar (TyKind l t k) = TyKind l (renameTyVar t) k
+    renameTyVar (TyBang l bt mpn t) = TyBang l bt mpn $ renameTyVar t
+    -- TODO: Maybe some error handling.
+    -- Following cases should never happen...
+    renameTyVar v = v
+
+data Classification = Keep | Rename | Drop | GoDeeper
+
+maybeToEither :: e -> Maybe a -> Either e a
+maybeToEither _ (Just a) = Right a
+maybeToEither e Nothing = Left e
+
+nameToStr :: Exts.Name l -> String
+nameToStr (Exts.Ident _ str) = str
+nameToStr (Exts.Symbol _ str) = str
+
+toVarName :: TyVarBind l -> Exts.Name l
+toVarName (KindedVar _ name _) = name
+toVarName (UnkindedVar _ name) = name
 
 undefined :: a
 undefined = undefined
 
 genData :: QuasiQuoter
 genData = QuasiQuoter
-    { quoteExp = undefined
-    , quotePat = error "Usage as a parttern is not supported."
+    { quoteExp = error "Usage as a expression is not supported."
+    , quotePat = error "Usage as a pattern is not supported."
     , quoteType = error "Usage as a type is not supported."
-    , quoteDec = error "Usage as a declaration is not supported."
+    , quoteDec = quoteDec'
     }
