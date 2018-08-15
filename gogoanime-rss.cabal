@@ -53,6 +53,7 @@ library
     , freer-effects
     , HandsomeSoup
     , haskell-src-exts
+    , haskell-src-meta
     , http-media
     , hxt
     , hxt-css
@@ -148,6 +149,7 @@ test-suite gogoanime-rss-test
     , freer-effects
     , HandsomeSoup
     , haskell-src-exts
+    , haskell-src-meta
     , http-media
     , hxt
     , hxt-css

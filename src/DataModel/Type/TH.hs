@@ -1,5 +1,7 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -11,7 +13,6 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
 
 module DataModel.Type.TH where
 #ifndef TEST
@@ -34,7 +35,7 @@ import Data.Eq (Eq, (==))
 import Data.Foldable (find, length)
 import Data.Function ((.), ($))
 import Data.Functor (fmap, void)
-import Data.List (repeat, zip, unzip, reverse, take, lookup)
+import Data.List (repeat, zip, unzip, reverse, take, lookup, head)
 import Data.Maybe (Maybe(Just, Nothing), maybe, isJust, catMaybes)
 import Data.Monoid ((<>), mconcat)
 import Data.Ord ((<))
@@ -95,6 +96,7 @@ import Language.Haskell.TH
     , reportError
     , runIO
     )
+import Language.Haskell.Meta.Syntax.Translate (toDecs)
 import qualified Language.Haskell.TH as TH
     (Type(VarT, AppT, ArrowT, StarT, ConT))
 import Language.Haskell.TH.Quote
@@ -353,7 +355,14 @@ quoteDec' str = do
     validateDecl _ = fail "Only data declaration is supported!"
 
     generateDecl :: (Show l) => Decl l -> Ast -> Q [Dec]
-    generateDecl (DataDecl _ _ cntx head consts der) Ast{..} = fail "asdf"
+    generateDecl (DataDecl l don cntx head' consts der) Ast{..} = do
+        (newDeclHead, tvPairs) <- eitherToQ $ createNewDeclHead newName head' tv
+        newConsts <- eitherToQ $ mapM (createNewConstructors tvPairs cm) consts
+        pure . toDecs $ DataDecl l don cntx newDeclHead newConsts der
+      where
+        newName = Exts.Ident l $ (name :: Alias -> Name) $ head aliases
+        tv = typeVariables $ head aliases
+        cm = constructorMapping $ head aliases
 
 myToList :: DeclHead l -> [Exts.Name l]
 myToList decl =  myToList' decl []
@@ -406,12 +415,11 @@ createNewDeclHead newName decl typeVariables =
 
 createNewConstructors
     :: forall l
-    . Exts.Name l
-    -> QualConDecl l
-    -> [TypeVariablePair]
+    . [TypeVariablePair]
     -> [Constructor]
+    -> QualConDecl l
     -> Either String (QualConDecl l)
-createNewConstructors newName oldCon typeVarPairList conMappings =
+createNewConstructors typeVarPairList conMappings oldCon =
     QualConDecl (annotation oldCon)
     <$> modifyTypeVar (typeVars oldCon)
     <*> Right (context oldCon)
@@ -567,6 +575,9 @@ data Classification = Keep | Rename | Drop | GoDeeper
 maybeToEither :: e -> Maybe a -> Either e a
 maybeToEither _ (Just a) = Right a
 maybeToEither e Nothing = Left e
+
+eitherToQ :: Either String a -> Q a
+eitherToQ v = either fail (pure) v
 
 nameToStr :: Exts.Name l -> String
 nameToStr (Exts.Ident _ str) = str

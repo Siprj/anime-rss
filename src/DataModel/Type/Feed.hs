@@ -107,7 +107,7 @@ data Ahojda a b c d e = Ahojda
 
 ~~~
 
-alias Ahojda Maybe Identity : Ahojda => GetAhojda
+alias Ahojda Maybe Identity DontModify DontModify DontModify: Ahojda => GetAhojda
 
 conversion setAhojdaToGetAhojda = SetAhojda -> GetAhojda
 conversion getAhojdaToSetAhojda = GetAhojda -> SetAhojda
