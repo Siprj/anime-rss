@@ -98,16 +98,16 @@ $(simplify ''Feed' [TH.DontModify, TH.Proxy, TH.Identity] "SetFeed2")
 
 [genData|
 data Ahojda a b c d e = Ahojda
-    { ahoj1 :: (a -> d)
-    , ahoj2 :: ((b) a) Int
-    , ahoj3 :: c (URI e)
-    , ahoj4 :: Maybe Text
+    { ahoj1 :: a d
+    , ahoj2 :: b d
+    , ahoj3 :: a (Maybe e)
+    , ahoj4 :: b Text
     }
   deriving (Show, Read, Eq)
 
 ~~~
 
-alias Ahojda Maybe Identity DontModify DontModify DontModify: Ahojda => GetAhojda
+alias Ahojda Maybe Proxy DontModify DontModify DontModify: Ahojda => GetAhojda
 
 conversion setAhojdaToGetAhojda = SetAhojda -> GetAhojda
 conversion getAhojdaToSetAhojda = GetAhojda -> SetAhojda

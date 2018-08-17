@@ -360,6 +360,7 @@ quoteDec' str = do
         newConsts <- eitherToQ $ mapM (createNewConstructors tvPairs cm) consts
         pure . toDecs $ DataDecl l don cntx newDeclHead newConsts der
       where
+        -- TODO: Pair aliases and Decls. Head in following lines is wrong.
         newName = Exts.Ident l $ (name :: Alias -> Name) $ head aliases
         tv = typeVariables $ head aliases
         cm = constructorMapping $ head aliases
@@ -495,6 +496,7 @@ createNewConstructors typeVarPairList conMappings oldCon =
     translateType v@(TyVar _ name) =
         case lookup (nameToStr name) typeVarPairList of
             -- TODO: This error message sucks...
+            Just DontModify -> pure v
             Just _ -> Left $ "Type variable [" <> prettyPrint name
                 <> "] can't be used as final type."
             Nothing -> pure v
