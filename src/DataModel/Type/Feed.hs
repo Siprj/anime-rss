@@ -9,6 +9,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TypeOperators #-}
 
 module DataModel.Type.Feed
     ( Feed(..)
@@ -28,11 +29,13 @@ import Data.SafeCopy
     , extension
     )
 import Data.Text (Text)
+import Data.Maybe (Maybe)
 import Data.Time (UTCTime)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import Network.URI (URI)
 import Text.Show (Show)
+import Text.Read (Read)
 
 import DataModel.OrphanInstances ()
 import DataModel.Type.Old.Feed
@@ -83,6 +86,12 @@ instance Migrate SetFeed where
 
 newtype Kwa a = Kwa a
 
+--data (a :/ b) c = (:/)
+--    { pokpoku1 :: a
+--    , pokpoku2 :: b
+--    , pokpoku3 :: c
+--    }
+
 data Feed' f c a b d e g h = Feed'
     { name :: a Text
     , url :: c URI
@@ -94,16 +103,17 @@ data Feed' f c a b d e g h = Feed'
     , kwa :: c (Kwa d)
     }
 
+-- $(simplify ''(:/) [TH.DontModify, TH.Proxy] "SetFeed2")
 $(simplify ''Feed' [TH.DontModify, TH.Proxy, TH.Identity] "SetFeed2")
 
 [genData|
 data Ahojda a b c d e = Ahojda
-    { ahoj1 :: a d
-    , ahoj2 :: b d
+    { ahoj1 :: a URI
+    , ahoj2 :: b Int
     , ahoj3 :: a (Maybe e)
     , ahoj4 :: b Text
     }
-  deriving (Show, Read, Eq)
+  deriving (Show, Eq)
 
 ~~~
 

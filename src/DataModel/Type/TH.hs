@@ -95,6 +95,7 @@ import Language.Haskell.TH
     , reify
     , reportError
     , runIO
+    , reportWarning
     )
 import Language.Haskell.Meta.Syntax.Translate (toDecs)
 import qualified Language.Haskell.TH as TH
@@ -119,6 +120,7 @@ import qualified Text.Megaparsec.Char.Lexer as L
 import Text.Megaparsec (Parsec, try, parseErrorPretty', parse)
 import Text.Pretty.Simple (pShow)
 import Text.Show (Show, show)
+import qualified System.IO as S (writeFile)
 
 
 -- DataD Cxt Name [TyVarBndr] (Maybe Kind) [Con] [DerivClause]
@@ -126,6 +128,7 @@ import Text.Show (Show, show)
 simplify :: TH.Name -> [TypeVariable] -> String -> Q [Dec]
 simplify baseTypeName substitutions newTypeName = do
     baseType <- reify baseTypeName
+    runIO $ S.writeFile "/tmp/blabla" $ show baseType
     case baseType of
         TyConI (DataD cxt _ typeVariabls kind constructors derivings) -> do
             when (isJust kind) $ reportError
@@ -337,8 +340,10 @@ quoteDec' str = do
     (haskellString, ast) <- either parserFailed pure
         $ parse splitToHaskellStringAndAST "" str
     decl <- failOnError $ parseDecl haskellString
-    runIO . writeFile "/tmp/pokus.txt" $ pShow decl
-    generateDecl decl ast
+    runIO . writeFile "/tmp/pokus.txt" $ pShow $ fmap (\_-> ()) decl
+    ret <- generateDecl decl ast
+    runIO . writeFile "/tmp/pokus2.txt" $ pShow ret
+    pure ret
   where
     parserFailed = fail . parseErrorPretty' str
 
@@ -358,6 +363,8 @@ quoteDec' str = do
     generateDecl (DataDecl l don cntx head' consts der) Ast{..} = do
         (newDeclHead, tvPairs) <- eitherToQ $ createNewDeclHead newName head' tv
         newConsts <- eitherToQ $ mapM (createNewConstructors tvPairs cm) consts
+
+        runIO . writeFile "/tmp/pokus3.txt" $ pShow $ fmap (\_-> ()) $ DataDecl l don cntx newDeclHead newConsts der
         pure . toDecs $ DataDecl l don cntx newDeclHead newConsts der
       where
         -- TODO: Pair aliases and Decls. Head in following lines is wrong.
@@ -452,8 +459,9 @@ createNewConstructors typeVarPairList conMappings oldCon =
         Left "Infix data constructor is not supported."
     newConDecl (RecDecl l name records) = RecDecl l
         <$> (translateName name)
-        <*> mapM processRecord records
+        <*> processRecords records
       where
+        processRecords = fmap mconcat . mapM (leftMaybeToError . processRecord)
         processRecord (FieldDecl l2 names t) =
             FieldDecl l2 names <$> translateType t
 
@@ -472,9 +480,15 @@ createNewConstructors typeVarPairList conMappings oldCon =
 --    translateRecords =
 
     translateTypes :: [Type l] -> Either String [Type l]
-    translateTypes types = sequence $ fmap translateType types
+    translateTypes types =
+        mconcat <$> mapM (leftMaybeToError . translateType) types
 
-    translateType :: Type l -> Either String (Type l)
+    leftMaybeToError :: Either (Maybe String) a -> Either String [a]
+    leftMaybeToError (Right v) = pure [v]
+    leftMaybeToError (Left (Nothing)) = pure []
+    leftMaybeToError (Left (Just v)) = Left v
+
+    translateType :: Type l -> Either (Maybe String) (Type l)
     translateType (TyForall l typeVarBind context' t) =
         TyForall l typeVarBind context' <$> translateType t
     translateType (TyFun l t1 t2) =
@@ -490,14 +504,15 @@ createNewConstructors typeVarPairList conMappings oldCon =
     translateType (TyApp l t1 t2) =
         case classifyLeftSide t1 of
             Keep -> TyApp l t1 <$> translateType t2
-            Rename -> TyApp l (renameTyVar t2) <$> translateType t2
+            Rename -> TyApp l (renameTyVar t1) <$> translateType t2
             GoDeeper -> TyApp l <$> translateType t1 <*> translateType t2
-            Drop -> translateType t2
+            Drop -> Left Nothing
+            -- TODO: This mean we need to drop the whole field.
     translateType v@(TyVar _ name) =
         case lookup (nameToStr name) typeVarPairList of
             -- TODO: This error message sucks...
             Just DontModify -> pure v
-            Just _ -> Left $ "Type variable [" <> prettyPrint name
+            Just _ -> Left . Just $ "Type variable [" <> prettyPrint name
                 <> "] can't be used as final type."
             Nothing -> pure v
     translateType v@TyCon{} = pure v
@@ -505,17 +520,17 @@ createNewConstructors typeVarPairList conMappings oldCon =
     translateType (TyInfix l t1 name t2) =
         case classifyLeftSide t1 of
             Keep -> TyInfix l t1 <$> pure name <*> translateType t2
-            Rename -> TyInfix l (renameTyVar t2)
+            Rename -> TyInfix l (renameTyVar t1)
                 <$> pure name
                 <*> translateType t2
             GoDeeper -> TyInfix l
                 <$> translateType t1
                 <*> pure name
                 <*> translateType t2
-            Drop -> Left $ "Can't drop infix name: " <> prettyPrint name
+            Drop -> Left . Just $ "Can't drop infix name: " <> prettyPrint name
     translateType (TyKind l t k) = TyKind l <$> translateType t <*> pure k
     -- TODO: Promoted types can contain type variables to... This mistake
-    -- is multiple places.
+    -- is on multiple places.
     -- Let's ignore it for now.
     translateType v@TyPromoted{} = pure v
     -- TODO: Not sure about this one... Should it behave the same way as TyApp?
@@ -565,7 +580,7 @@ createNewConstructors typeVarPairList conMappings oldCon =
         -- Following two cases should never happen...
         toNewVaule DontModify = v
         toNewVaule Proxy = v
-    renameTyVar (TyParen l t) = TyParArray l $ renameTyVar t
+    renameTyVar (TyParen l t) = TyParen l $ renameTyVar t
     renameTyVar (TyKind l t k) = TyKind l (renameTyVar t) k
     renameTyVar (TyBang l bt mpn t) = TyBang l bt mpn $ renameTyVar t
     -- TODO: Maybe some error handling.
