@@ -28,7 +28,9 @@ import Control.Applicative.Combinators (manyTill, sepBy1, many)
 import Control.Applicative ((<$>), (<*>), (<|>), (<*), (*>), pure)
 import Control.Lens.Setter (over)
 import Control.Lens.Tuple (_1)
-import Control.Monad ((>>), mapM, mapM_, when, fail)
+import Control.Monad ((>>=), (>>), mapM, mapM_, when, fail)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Reader (Reader, ReaderT(runReaderT), ask)
 import Data.Data (Data)
 import Data.Either (Either(Left, Right), either)
 import Data.Eq (Eq, (==))
@@ -335,6 +337,7 @@ splitToHaskellStringAndAST = do
     ast <- parseAst
     pure (haskellStr, ast)
 
+-- TODO: Remove runIO . writeFile ...
 quoteDec' :: String -> Q [Dec]
 quoteDec' str = do
     (haskellString, ast) <- either parserFailed pure
@@ -398,7 +401,7 @@ createNewDeclHead newName decl typeVariables =
         -> [TypeVariablePair]
         -> [TypeVariable]
         -> Either String (DeclHead l, [TypeVariablePair])
-    createNewDeclHead' (DHead l _) ys [] = Right (DHead l newName, ys)
+    createNewDeclHead' (DHead l _) ys [] = pure (DHead l newName, ys)
     createNewDeclHead' (DHead _ _) _ xs =
         Left $ "Data type have to have same number of type parameters as the"
             <> " alias. Spare type variables are:\n "
@@ -419,8 +422,6 @@ createNewDeclHead newName decl typeVariables =
         magic DontModify v = DHApp l v typeVar
         magic _ v = v
 
--- TODO: Right -> pure
-
 createNewConstructors
     :: forall l
     . [TypeVariablePair]
@@ -430,11 +431,11 @@ createNewConstructors
 createNewConstructors typeVarPairList conMappings oldCon =
     QualConDecl (annotation oldCon)
     <$> modifyTypeVar (typeVars oldCon)
-    <*> Right (context oldCon)
+    <*> pure (context oldCon)
     <*> newConDecl (conDecl oldCon)
   where
     modifyTypeVar :: Maybe [TyVarBind l] -> Either String (Maybe [TyVarBind l])
-    modifyTypeVar tvs = Right tvs
+    modifyTypeVar = pure
 
     annotation :: QualConDecl l -> l
     annotation (QualConDecl l _ _ _) = l
@@ -461,7 +462,8 @@ createNewConstructors typeVarPairList conMappings oldCon =
         <$> (translateName name)
         <*> processRecords records
       where
-        processRecords = fmap mconcat . mapM (leftMaybeToError . processRecord)
+        processRecords = fmap mconcat . mapM (\v -> leftMaybeToError
+            $ runReaderT (processRecord v) typeVarPairList)
         processRecord (FieldDecl l2 names t) =
             FieldDecl l2 names <$> translateType t
 
@@ -480,121 +482,133 @@ createNewConstructors typeVarPairList conMappings oldCon =
 --    translateRecords =
 
     translateTypes :: [Type l] -> Either String [Type l]
-    translateTypes types =
-        mconcat <$> mapM (leftMaybeToError . translateType) types
+    translateTypes types = mconcat
+        <$> mapM (\v -> leftMaybeToError
+            $ runReaderT (translateType v) typeVarPairList) types
 
     leftMaybeToError :: Either (Maybe String) a -> Either String [a]
     leftMaybeToError (Right v) = pure [v]
     leftMaybeToError (Left (Nothing)) = pure []
     leftMaybeToError (Left (Just v)) = Left v
 
-    translateType :: Type l -> Either (Maybe String) (Type l)
-    translateType (TyForall l typeVarBind context' t) =
-        TyForall l typeVarBind context' <$> translateType t
-    translateType (TyFun l t1 t2) =
-        TyFun l <$> translateType t1 <*> translateType t2
-    translateType (TyTuple l boxed ts) =
-        TyTuple l boxed <$> sequence (fmap translateType ts)
-    translateType (TyUnboxedSum l ts) =
-        TyUnboxedSum l <$> sequence (fmap translateType ts)
-    translateType (TyList l t) =
-        TyList l <$> translateType t
-    translateType (TyParArray l t) =
-        TyParArray l <$> translateType t
-    translateType (TyApp l t1 t2) =
-        case classifyLeftSide t1 of
-            Keep -> TyApp l t1 <$> translateType t2
-            Rename -> TyApp l (renameTyVar t1) <$> translateType t2
-            GoDeeper -> TyApp l <$> translateType t1 <*> translateType t2
-            Drop -> Left Nothing
-            -- TODO: This mean we need to drop the whole field.
-    translateType v@(TyVar _ name) =
-        case lookup (nameToStr name) typeVarPairList of
-            -- TODO: This error message sucks...
-            Just DontModify -> pure v
-            Just _ -> Left . Just $ "Type variable [" <> prettyPrint name
-                <> "] can't be used as final type."
-            Nothing -> pure v
-    translateType v@TyCon{} = pure v
-    translateType (TyParen l t) = TyParen l <$> translateType t
-    translateType (TyInfix l t1 name t2) =
-        case classifyLeftSide t1 of
-            Keep -> TyInfix l t1 <$> pure name <*> translateType t2
-            Rename -> TyInfix l (renameTyVar t1)
-                <$> pure name
-                <*> translateType t2
-            GoDeeper -> TyInfix l
-                <$> translateType t1
-                <*> pure name
-                <*> translateType t2
-            Drop -> Left . Just $ "Can't drop infix name: " <> prettyPrint name
-    translateType (TyKind l t k) = TyKind l <$> translateType t <*> pure k
-    -- TODO: Promoted types can contain type variables to... This mistake
-    -- is on multiple places.
-    -- Let's ignore it for now.
-    translateType v@TyPromoted{} = pure v
-    -- TODO: Not sure about this one... Should it behave the same way as TyApp?
-    translateType (TyEquals l t1 t2) =
-        TyEquals l <$> translateType t1 <*> translateType t2
-    translateType v@TySplice{} = pure v
-    translateType (TyBang l bt us t) = TyBang l bt us <$> translateType t
-    translateType v@TyWildCard{} = pure v
-    translateType v@TyQuasiQuote{} = pure v
+type TransM = ReaderT [TypeVariablePair] (Either (Maybe String))
 
-    classifyLeftSide :: Type l -> Classification
-    classifyLeftSide TyForall{} = Keep
-    classifyLeftSide TyFun{} = GoDeeper
-    classifyLeftSide TyTuple{} = GoDeeper
-    classifyLeftSide TyUnboxedSum{} = GoDeeper
-    classifyLeftSide (TyList _ t) = classifyLeftSide t
-    classifyLeftSide (TyParArray _ t) = classifyLeftSide t
-    classifyLeftSide TyApp{} = GoDeeper
-    classifyLeftSide (TyVar _ name) =
-        case lookup (nameToStr name) typeVarPairList of
-            Just DontModify -> Keep
-            Just Proxy -> Drop
-            Just Identity -> Rename
-            Just Maybe -> Rename
-            _ -> Keep
-    classifyLeftSide (TyCon _ _) = Keep
-    classifyLeftSide (TyParen _ t) = classifyLeftSide t
-    classifyLeftSide TyInfix{} = GoDeeper
-    classifyLeftSide (TyKind _ t _) = classifyLeftSide t
-    classifyLeftSide (TyPromoted _ _) = Keep
-    classifyLeftSide TyEquals{} = GoDeeper
-    classifyLeftSide (TySplice _ _) = Keep
-    classifyLeftSide (TyBang _ _ _ t) = classifyLeftSide t
-    classifyLeftSide (TyWildCard _ _) = Keep
-    classifyLeftSide TyQuasiQuote{} = Keep
+translateType :: Type l -> TransM (Type l)
+translateType (TyForall l typeVarBind context' t) =
+    TyForall l typeVarBind context' <$> translateType t
+translateType (TyFun l t1 t2) =
+    TyFun l <$> translateType t1 <*> translateType t2
+translateType (TyTuple l boxed ts) =
+    TyTuple l boxed <$> sequence (fmap translateType ts)
+translateType (TyUnboxedSum l ts) =
+    TyUnboxedSum l <$> sequence (fmap translateType ts)
+translateType (TyList l t) =
+    TyList l <$> translateType t
+translateType (TyParArray l t) =
+    TyParArray l <$> translateType t
+translateType (TyApp l t1 t2) =
+    classifyLeftSide t1 >>= \case
+        Keep -> TyApp l t1 <$> translateType t2
+        Rename -> TyApp l <$> renameTyVar t1 <*> translateType t2
+        GoDeeper -> TyApp l <$> translateType t1 <*> translateType t2
+        Drop -> lift $ Left Nothing
+        -- TODO: This mean we need to drop the whole field.
+translateType v@(TyVar _ name) = do
+    typeVarPairList <- ask
+    case lookup (nameToStr name) typeVarPairList of
+        -- TODO: This error message sucks...
+        Just DontModify -> pure v
+        Just _ -> lift . Left . Just $ "Type variable [" <> prettyPrint name
+            <> "] can't be used as final type."
+        Nothing -> pure v
+translateType v@TyCon{} = pure v
+translateType (TyParen l t) = TyParen l <$> translateType t
+translateType (TyInfix l t1 name t2) = do
+    v <- classifyLeftSide t1
+    case v of
+        Keep -> TyInfix l t1 <$> pure name <*> translateType t2
+        Rename -> TyInfix l
+            <$> renameTyVar t1
+            <*> pure name
+            <*> translateType t2
+        GoDeeper -> TyInfix l
+            <$> translateType t1
+            <*> pure name
+            <*> translateType t2
+        Drop -> lift . Left . Just
+            $ "Can't drop infix name: " <> prettyPrint name
+translateType (TyKind l t k) = TyKind l <$> translateType t <*> pure k
+-- TODO: Promoted types can contain type variables to... This mistake
+-- is on multiple places.
+-- Let's ignore it for now.
+translateType v@TyPromoted{} = pure v
+-- TODO: Not sure about this one... Should it behave the same way as TyApp?
+translateType (TyEquals l t1 t2) =
+    TyEquals l <$> translateType t1 <*> translateType t2
+translateType v@TySplice{} = pure v
+translateType (TyBang l bt us t) = TyBang l bt us <$> translateType t
+translateType v@TyWildCard{} = pure v
+translateType v@TyQuasiQuote{} = pure v
 
-    renameTyVar :: Type l -> Type l
-    renameTyVar (TyList l t) = TyList l $ renameTyVar t
-    renameTyVar (TyParArray l t) = TyParArray l $ renameTyVar t
-    renameTyVar v@(TyVar l name) = maybe v toNewVaule
-        $ lookup (nameToStr name) typeVarPairList
-      where
-        toNewVaule :: TypeVariable -> Type l
-        toNewVaule Identity = TyCon l (UnQual l (Exts.Ident l "Identity"))
-        toNewVaule Maybe = TyCon l (UnQual l (Exts.Ident l "Maybe"))
-        -- TODO: Maybe some error handling.
-        -- Following two cases should never happen...
-        toNewVaule DontModify = v
-        toNewVaule Proxy = v
-    renameTyVar (TyParen l t) = TyParen l $ renameTyVar t
-    renameTyVar (TyKind l t k) = TyKind l (renameTyVar t) k
-    renameTyVar (TyBang l bt mpn t) = TyBang l bt mpn $ renameTyVar t
-    -- TODO: Maybe some error handling.
-    -- Following cases should never happen...
-    renameTyVar v = v
+classifyLeftSide :: Type l -> TransM Classification
+classifyLeftSide TyForall{} = pure Keep
+classifyLeftSide TyFun{} = pure GoDeeper
+classifyLeftSide TyTuple{} = pure GoDeeper
+classifyLeftSide TyUnboxedSum{} = pure GoDeeper
+classifyLeftSide (TyList _ t) = classifyLeftSide t
+classifyLeftSide (TyParArray _ t) = classifyLeftSide t
+classifyLeftSide TyApp{} = pure GoDeeper
+classifyLeftSide (TyVar _ name) = do
+    typeVarPairList <- ask
+    pure $ case lookup (nameToStr name) typeVarPairList of
+        Just DontModify -> Keep
+        Just Proxy -> Drop
+        Just Identity -> Rename
+        Just Maybe -> Rename
+        _ -> Keep
+classifyLeftSide TyCon{} = pure Keep
+classifyLeftSide (TyParen _ t) = classifyLeftSide t
+classifyLeftSide TyInfix{} = pure GoDeeper
+classifyLeftSide (TyKind _ t _) = classifyLeftSide t
+classifyLeftSide TyPromoted{} = pure Keep
+classifyLeftSide TyEquals{} = pure GoDeeper
+classifyLeftSide TySplice{} = pure Keep
+classifyLeftSide (TyBang _ _ _ t) = classifyLeftSide t
+classifyLeftSide TyWildCard{} = pure Keep
+classifyLeftSide TyQuasiQuote{} = pure Keep
+
+renameTyVar :: forall l. Type l -> TransM (Type l)
+renameTyVar (TyList l t) = TyList l <$> renameTyVar t
+renameTyVar (TyParArray l t) = TyParArray l <$> renameTyVar t
+renameTyVar v@(TyVar l name) = do
+    typeVarPairList <- ask
+    maybe err toNewVaule $ lookup (nameToStr name) typeVarPairList
+  where
+    toNewVaule :: TypeVariable -> TransM (Type l)
+    toNewVaule Maybe = pure $ TyCon l (UnQual l (Exts.Ident l "Maybe"))
+    toNewVaule DontModify = pure v
+    toNewVaule x = lift . Left . Just
+        $ "Internal error `renameTyVar`. Unsupported TypeVariable constructor: "
+        <> show x
+
+    err = lift . Left . Just
+        $ "Internal error `renameTyVar`. Type variable is not in type " <>
+        "variable list: " <> prettyPrint name
+renameTyVar (TyParen l t) = TyParen l <$> renameTyVar t
+renameTyVar (TyKind l t k) = (\v -> TyKind l v k) <$> renameTyVar t
+renameTyVar (TyBang l bt mpn t) = TyBang l bt mpn <$> renameTyVar t
+renameTyVar v = lift . Left . Just
+    $ "Internal error renameTyVar: Unsupported type constructor: "
+    <> prettyPrint v
 
 data Classification = Keep | Rename | Drop | GoDeeper
 
 maybeToEither :: e -> Maybe a -> Either e a
-maybeToEither _ (Just a) = Right a
+maybeToEither _ (Just a) = pure a
 maybeToEither e Nothing = Left e
 
 eitherToQ :: Either String a -> Q a
-eitherToQ v = either fail (pure) v
+eitherToQ = either fail pure
 
 nameToStr :: Exts.Name l -> String
 nameToStr (Exts.Ident _ str) = str
