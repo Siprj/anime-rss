@@ -123,7 +123,8 @@ data TypeVariable = Identity | Proxy | Maybe | DontModify
   deriving (Eq, Typeable, Generic, Data, Show)
 
 data Alias = Alias
-    { name :: Name
+    { newName :: Name
+    , originalName :: Name
     , typeVariables :: [TypeVariable]
     , constructorMapping :: [Constructor]
     }
@@ -181,15 +182,18 @@ reservedWords :: [String]
 reservedWords =
     ["if","then","else","case","type","skip","true","false","not","and","or"]
 
-upperName :: Parser String
+upperName :: Parser Name
 upperName = (lexeme . try) p
   where
     p = (:) <$> upperChar <*> many alphaNumChar
 
-lowerName :: Parser String
+lowerName :: Parser Name
 lowerName = (lexeme . try) p
   where
     p = (:) <$> lowerChar <*> many alphaNumChar
+
+parseOriginalName :: Parser Name
+parseOriginalName = equal *> upperName
 
 parserConstructorMapping :: Parser Constructor
 parserConstructorMapping = do
@@ -210,6 +214,7 @@ parseTypeVariable = (try (symbol "Identity") >> pure Identity)
 parseAlias :: Parser Alias
 parseAlias = alias >> Alias
     <$> upperName
+    <*> parseOriginalName
     <*> manyTill parseTypeVariable colon
     <*> parserConstructors
 
@@ -267,14 +272,14 @@ quoteDec' str = do
 
     generateDecl :: (Show l) => Decl l -> Ast -> Q [Dec]
     generateDecl (DataDecl l don cntx head' consts der) Ast{..} = do
-        (newDeclHead, tvPairs) <- eitherToQ $ createNewDeclHead newName head' tv
+        (newDeclHead, tvPairs) <- eitherToQ $ createNewDeclHead newName' head' tv
         newConsts <- eitherToQ $ mapM (createNewConstructors tvPairs cm) consts
 
         runIO . writeFile "/tmp/pokus3.txt" $ pShow $ fmap (\_-> ()) $ DataDecl l don cntx newDeclHead newConsts der
         pure . toDecs $ DataDecl l don cntx newDeclHead newConsts der
       where
         -- TODO: Pair aliases and Decls. Head in following lines is wrong.
-        newName = Exts.Ident l $ (name :: Alias -> Name) $ head aliases
+        newName' = Exts.Ident l $ (newName :: Alias -> Name) $ head aliases
         tv = typeVariables $ head aliases
         cm = constructorMapping $ head aliases
 

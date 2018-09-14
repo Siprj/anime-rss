@@ -113,7 +113,8 @@ data Ahojda a b c d e = Ahojda
 
 ~~~
 
-alias Ahojda Maybe Proxy DontModify DontModify DontModify: Ahojda => GetAhojda
+alias GetAhojda = Ahojda Maybe Proxy DontModify DontModify DontModify:
+    Ahojda => KwaGetAhojda
 
 conversion setAhojdaToGetAhojda = SetAhojda -> GetAhojda
 conversion getAhojdaToSetAhojda = GetAhojda -> SetAhojda
