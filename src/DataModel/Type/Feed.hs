@@ -16,7 +16,6 @@ module DataModel.Type.Feed
     , SetFeed(..)
     , Feed'(..)
     , Kwa(..)
-    , SetFeed2(Feed'', name, blabla, date, imgUrl, ahoj, episodeNumber)
     )
   where
 
@@ -43,7 +42,7 @@ import DataModel.Type.Old.Feed
     , SetFeed_v0(SetFeed_v0, setFeedName_v0, setFeedUrl_v0, setFeedImgUrl_v0)
     )
 
-import DataModel.Type.TH (simplify, genData)
+import DataModel.Type.TH (genData)
 import qualified DataModel.Type.TH as TH (TypeVariable(Identity, Proxy, DontModify))
 
 
@@ -102,9 +101,6 @@ data Feed' f c a b d e g h = Feed'
     , episodeNumber :: a Int
     , kwa :: c (Kwa d)
     }
-
--- $(simplify ''(:/) [TH.DontModify, TH.Proxy] "SetFeed2")
-$(simplify ''Feed' [TH.DontModify, TH.Proxy, TH.Identity] "SetFeed2")
 
 [genData|
 data Ahojda a b c d e = Ahojda
