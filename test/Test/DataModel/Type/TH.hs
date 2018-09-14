@@ -48,37 +48,11 @@ import DataModel.Type.TH
     , TypeVariablePair
     , createNewDeclHead
     , renameTyVar
+    , translateType
     )
 
 
 -- TODO: More complex test with declarations containing parentheses.
-
-renameTyVarData1 :: Type ()
-renameTyVarData1 = TyVar () (Ident () "a")
-
-renameTyVarData2 :: Type ()
-renameTyVarData2 = TyVar () (Ident () "b")
-
-renameTyVarData3 :: Type ()
-renameTyVarData3 = TyParen () (TyVar () (Ident () "c"))
-
-renameTyVarData4 :: Type ()
-renameTyVarData4 = TyParen () (TyVar () (Ident () "e"))
-
-renameTyVarResult1 :: Type ()
-renameTyVarResult1 = TyCon () (UnQual () (Ident () "Maybe"))
-
-renameTyVarResult2 :: Either (Maybe String) (Type ())
-renameTyVarResult2 = Left $ Just
-    "Internal error `renameTyVar`. Unsupported TypeVariable constructor: Proxy"
-
-renameTyVarResult3 :: Type ()
-renameTyVarResult3 = TyParen () (TyVar () (Ident () "c"))
-
-renameTyVarResult4 :: Either (Maybe String) (Type ())
-renameTyVarResult4 = Left . Just
-    $ "Internal error `renameTyVar`. Type variable is not in type variable "
-    <> "list: e"
 
 typeVariablePairs :: [TypeVariablePair]
 typeVariablePairs =
@@ -88,17 +62,44 @@ typeVariablePairs =
     , ("d", Identity)
     ]
 
+renameTyVarData1 :: Type ()
+renameTyVarData1 = TyVar () (Ident () "a")
+
+renameTyVarResult1 :: Type ()
+renameTyVarResult1 = TyCon () (UnQual () (Ident () "Maybe"))
+
 renameTyVarTest1 :: Assertion
 renameTyVarTest1 = Right renameTyVarResult1
     @=? runReaderT (renameTyVar renameTyVarData1) typeVariablePairs
+
+renameTyVarData2 :: Type ()
+renameTyVarData2 = TyVar () (Ident () "b")
+
+renameTyVarResult2 :: Either (Maybe String) (Type ())
+renameTyVarResult2 = Left $ Just
+    "Internal error `renameTyVar`. Unsupported TypeVariable constructor: Proxy"
 
 renameTyVarTest2 :: Assertion
 renameTyVarTest2 = renameTyVarResult2
     @=? runReaderT (renameTyVar renameTyVarData2) typeVariablePairs
 
+renameTyVarResult3 :: Type ()
+renameTyVarResult3 = TyParen () (TyVar () (Ident () "c"))
+
+renameTyVarData3 :: Type ()
+renameTyVarData3 = TyParen () (TyVar () (Ident () "c"))
+
 renameTyVarTest3 :: Assertion
 renameTyVarTest3 = Right renameTyVarResult3
     @=? runReaderT (renameTyVar renameTyVarData3) typeVariablePairs
+
+renameTyVarResult4 :: Either (Maybe String) (Type ())
+renameTyVarResult4 = Left . Just
+    $ "Internal error `renameTyVar`. Type variable is not in type variable "
+    <> "list: e"
+
+renameTyVarData4 :: Type ()
+renameTyVarData4 = TyParen () (TyVar () (Ident () "e"))
 
 renameTyVarTest4 :: Assertion
 renameTyVarTest4 = renameTyVarResult4
@@ -135,6 +136,59 @@ translationList =
     , ("b", DontModify)
     ]
 
+translateTypeData1 :: Type ()
+translateTypeData1 = TyApp ()
+    (TyVar () (Ident () "b" )) (TyCon () (UnQual () (Ident () "Text")))
+
+translateTypeResult1 :: Either (Maybe String) (Type ())
+translateTypeResult1 = Left Nothing
+
+translateTypeTest1 :: Assertion
+translateTypeTest1 = translateTypeResult1
+    @=? runReaderT (translateType translateTypeData1) typeVariablePairs
+
+translateTypeData2 :: Type ()
+translateTypeData2 = TyApp ()
+    (TyVar () (Ident () "a"))
+    (TyParen ()
+        (TyFun () (TyVar () (Ident () "e")) (TyVar () (Ident () "e")))
+    )
+
+translateTypeResult2 :: Either (Maybe String) (Type ())
+translateTypeResult2 = Right $ TyApp ()
+        ( TyCon () (UnQual () (Ident () "Maybe")))
+        ( TyParen ()
+            (TyFun () (TyVar () (Ident () "e")) (TyVar () (Ident () "e")))
+        )
+
+translateTypeTest2 :: Assertion
+translateTypeTest2 = translateTypeResult2
+    @=? runReaderT (translateType translateTypeData2) typeVariablePairs
+
+translateTypeData3 :: Type ()
+translateTypeData3 = TyApp ()
+    (TyVar () (Ident () "a" )) (TyCon () (UnQual () (Ident () "Text")))
+
+translateTypeResult3 :: Either (Maybe String) (Type ())
+translateTypeResult3 = Right $ TyApp ()
+    (TyCon () (UnQual () (Ident () "Maybe")))
+    (TyCon () (UnQual () (Ident () "Text")))
+
+translateTypeTest3 :: Assertion
+translateTypeTest3 = translateTypeResult3
+    @=? runReaderT (translateType translateTypeData3) typeVariablePairs
+
+translateTypeData4 :: Type ()
+translateTypeData4 = TyApp ()
+    (TyVar () (Ident () "d" )) (TyCon () (UnQual () (Ident () "Text")))
+
+translateTypeResult4 :: Either (Maybe String) (Type ())
+translateTypeResult4 = Right $ TyCon () (UnQual () (Ident () "Text"))
+
+translateTypeTest4 :: Assertion
+translateTypeTest4 = translateTypeResult4
+    @=? runReaderT (translateType translateTypeData4) typeVariablePairs
+
 testShort :: Assertion
 testShort = Left "There is surplus of type variable in data declaration: C a b"
     @=? createNewDeclHead newName dataDecl shortTypeVarList
@@ -158,5 +212,9 @@ tests = testGroup "DataModel.Type.TH"
         , testCase "renameTyVar-2" renameTyVarTest2
         , testCase "renameTyVar-3" renameTyVarTest3
         , testCase "renameTyVar-4" renameTyVarTest4
+        , testCase "translateType-1" translateTypeTest1
+        , testCase "translateType-2" translateTypeTest2
+        , testCase "translateType-3" translateTypeTest3
+        , testCase "translateType-4" translateTypeTest4
         ]
     ]

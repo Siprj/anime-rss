@@ -456,10 +456,10 @@ createNewConstructors typeVarPairList conMappings oldCon =
     newConDecl (ConDecl l name types) = ConDecl l
         <$> translateName name
         <*> translateTypes types
-    newConDecl (InfixConDecl _ _ _ _) =
+    newConDecl InfixConDecl{} =
         Left "Infix data constructor is not supported."
     newConDecl (RecDecl l name records) = RecDecl l
-        <$> (translateName name)
+        <$> translateName name
         <*> processRecords records
       where
         processRecords = fmap mconcat . mapM (\v -> leftMaybeToError
@@ -488,7 +488,7 @@ createNewConstructors typeVarPairList conMappings oldCon =
 
     leftMaybeToError :: Either (Maybe String) a -> Either String [a]
     leftMaybeToError (Right v) = pure [v]
-    leftMaybeToError (Left (Nothing)) = pure []
+    leftMaybeToError (Left Nothing) = pure []
     leftMaybeToError (Left (Just v)) = Left v
 
 type TransM = ReaderT [TypeVariablePair] (Either (Maybe String))
@@ -511,8 +511,8 @@ translateType (TyApp l t1 t2) =
         Keep -> TyApp l t1 <$> translateType t2
         Rename -> TyApp l <$> renameTyVar t1 <*> translateType t2
         GoDeeper -> TyApp l <$> translateType t1 <*> translateType t2
+        Flatten -> translateType t2
         Drop -> lift $ Left Nothing
-        -- TODO: This mean we need to drop the whole field.
 translateType v@(TyVar _ name) = do
     typeVarPairList <- ask
     case lookup (nameToStr name) typeVarPairList of
@@ -535,7 +535,7 @@ translateType (TyInfix l t1 name t2) = do
             <$> translateType t1
             <*> pure name
             <*> translateType t2
-        Drop -> lift . Left . Just
+        _ -> lift . Left . Just
             $ "Can't drop infix name: " <> prettyPrint name
 translateType (TyKind l t k) = TyKind l <$> translateType t <*> pure k
 -- TODO: Promoted types can contain type variables to... This mistake
@@ -563,7 +563,7 @@ classifyLeftSide (TyVar _ name) = do
     pure $ case lookup (nameToStr name) typeVarPairList of
         Just DontModify -> Keep
         Just Proxy -> Drop
-        Just Identity -> Rename
+        Just Identity -> Flatten
         Just Maybe -> Rename
         _ -> Keep
 classifyLeftSide TyCon{} = pure Keep
@@ -601,7 +601,7 @@ renameTyVar v = lift . Left . Just
     $ "Internal error renameTyVar: Unsupported type constructor: "
     <> prettyPrint v
 
-data Classification = Keep | Rename | Drop | GoDeeper
+data Classification = Keep | Rename | Drop | GoDeeper | Flatten
 
 maybeToEither :: e -> Maybe a -> Either e a
 maybeToEither _ (Just a) = pure a
