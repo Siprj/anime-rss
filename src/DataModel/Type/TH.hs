@@ -13,6 +13,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TupleSections #-}
 
 module DataModel.Type.TH where
 #ifndef TEST
@@ -32,13 +33,15 @@ import Control.Monad ((>>=), (>>), mapM, mapM_, when, fail)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (Reader, ReaderT(runReaderT), ask)
 import Data.Data (Data)
+import Data.Bool (Bool, otherwise)
 import Data.Either (Either(Left, Right), either)
-import Data.Eq (Eq, (==))
+import Data.Eq (Eq, (==), (/=))
 import Data.Foldable (find, length)
-import Data.Function ((.), ($))
+import Data.Function ((.), ($), const)
 import Data.Functor (fmap, void)
 import Data.List
     ( (\\)
+    , elem
     , head
     , intercalate
     , length
@@ -52,11 +55,11 @@ import Data.List
     )
 import Data.Maybe (Maybe(Just, Nothing), maybe, isJust, catMaybes)
 import Data.Monoid ((<>), mconcat)
-import Data.Ord ((<))
+import Data.Ord ((<), compare)
 import Data.String (String)
 import Data.Text.Lazy (unpack)
 import Data.Text.Lazy.IO (writeFile)
-import Data.Tuple (fst)
+import Data.Tuple (fst, snd, uncurry)
 import Data.Typeable (Typeable)
 import Data.Traversable (sequence)
 import Data.Void (Void)
@@ -144,17 +147,20 @@ data Alias = Alias
     , typeVariables :: [TypeVariable]
     , constructorMapping :: [Constructor]
     }
+  deriving (Show)
 
 data Conversion = Conversion
     { name :: Name
     , from :: Name
     , to :: Name
     }
+  deriving (Show)
 
 data Ast = Ast
     { aliases :: [Alias]
     , conversions :: [Conversion]
     }
+  deriving (Show)
 
 type Parser = Parsec Void String
 
@@ -261,20 +267,19 @@ splitToHaskellStringAndAST = do
     ast <- parseAst
     pure (haskellStr, ast)
 
-data DataDec l = DataDec
-    { annotation :: l
-    , dataOrNew :: DataOrNew l
-    , context :: Maybe (Context l)
-    , declarationHead :: DeclHead l
-    , constructorDeclarations :: [QualConDecl l]
-    , derivings :: [Deriving l]
+data DataDec = DataDec
+    { dataOrNew :: DataOrNew ()
+    , context :: Maybe (Context ())
+    , declarationHead :: DeclHead ()
+    , constructorDeclarations :: [QualConDecl ()]
+    , derivings :: [Deriving ()]
     }
+  deriving (Show, Eq)
 
-toDataDec :: Decl l -> Q (DataDec l)
-toDataDec (DataDecl annotation dataOrNew context declHead const derivings) =
+toDataDec :: Decl () -> Q DataDec
+toDataDec (DataDecl _ dataOrNew context declHead const derivings) =
     pure $ DataDec
-        { annotation
-        , dataOrNew
+        { dataOrNew
         , context
         , declarationHead = declHead
         , constructorDeclarations = const
@@ -287,57 +292,128 @@ quoteDec' :: String -> Q [Dec]
 quoteDec' str = do
     (haskellString, ast) <- either parserFailed pure
         $ parse splitToHaskellStringAndAST "" str
-    decls <- toDecls (parseModule haskellString) >>= mapM toDataDec
-    validateDeclsAndAliases decls $ aliases ast
+    decls <- toDecls (parseModule haskellString)
+        >>= mapM (toDataDec . fmap (const ()))
 
-    runIO . writeFile "/tmp/pokus.txt" $ pShow $ fmap (\_-> ()) decls
---    ret <- mconcat <$> mapM (generateDataDec ast) decls
---    runIO . writeFile "/tmp/pokus2.txt" $ pShow ret
+    failOnConversionFunctions ast
+    eitherToQ $ checkAstForDuplicities ast
+    pairs <- eitherToQ $ pairDeclAndAliases decls $ aliases ast
+
+    runIO . writeFile "/tmp/pokus.txt" $ pShow decls
+    ret <- mconcat <$> mapM (uncurry generateDataDec) pairs
+    runIO . writeFile "/tmp/pokus2.txt" $ pShow ret
 --    pure ret
     pure []
   where
     parserFailed = fail . parseErrorPretty' str
+
+    failOnConversionFunctions Ast{..} = when (length conversions /= 0)
+        $ fail "Conversion function generation not yet supported."
 
     toDecls = \case
         ParseFailed _loc str' -> fail str'
         ParseOk (Module _ _ _ _ decls) -> pure decls
         ParseOk _ -> fail "Not a valid haskell code."
 
-    generateDataDec :: Show l => Alias -> DataDec l -> Q [Dec]
-    generateDataDec Alias {..} (DataDec l don cntx head' consts der) = do
+    generateDataDec :: Alias -> DataDec -> Q [Dec]
+    generateDataDec Alias {..} (DataDec don cntx head' consts der) = do
         (newDeclHead, tvPairs) <-
             eitherToQ $ createNewDeclHead newName' head' typeVariables
         newConsts <- eitherToQ
             $ mapM (createNewConstructors tvPairs constructorMapping) consts
 
-        runIO . writeFile "/tmp/pokus3.txt" $ pShow $ fmap (\_-> ()) $ DataDecl l don cntx newDeclHead newConsts der
-        pure . toDecs $ DataDecl l don cntx newDeclHead newConsts der
+        runIO . writeFile "/tmp/pokus3.txt" $ pShow $ fmap (\_-> ()) $ DataDecl () don cntx newDeclHead newConsts der
+        pure . toDecs $ DataDecl () don cntx newDeclHead newConsts der
       where
         -- TODO: Pair aliases and Decls. Head in following lines is wrong.
-        newName' = Exts.Ident l  newName
+        newName' = Exts.Ident () newName
 
-validateDeclsAndAliases :: [DataDec l] -> [Alias] -> Q ()
-validateDeclsAndAliases decls aliases = do
-    xs <- (nub . fmap declToName) <$> mapM validateAlias aliases
-    if length xs == length decls
-       then pure ()
-       else errDataDecl xs
+checkAstForDuplicities :: Ast -> Either String ()
+checkAstForDuplicities Ast{..} = do
+    when (length repeatedNewNames /= 0) newNameRepetitionError
+    when (length repeatedNewConstNames /= 0) newConstNameRepetitionError
+    when (length repeatedOrigConstNames /= 0) origConstNameRepetitionError
+    -- TODO: Test for conversion functions.
   where
-    validateAlias a@Alias{..} =
-        maybe (errAlias a) pure $ find (cmpNames originalName) decls
+    repeatedNewNames = snd . repeated $ fmap newName aliases
 
-    errAlias Alias{..} = fail $ "Alias " <> newName
-        <> "doesn't have coresponding data declaration. "
+    repeatedNewConstNames = snd . repeated .  mconcat
+        $ fmap (fmap snd . constructorMapping) aliases
+
+    repeatedOrigConstNames = mconcat $
+        fmap (snd . repeated . fmap fst . constructorMapping) aliases
+
+    newConstNameRepetitionError :: Either String ()
+    newConstNameRepetitionError =
+        Left $ "Following constructors names are duplicated: "
+        <> intercalate ", " repeatedNewConstNames
+
+    origConstNameRepetitionError :: Either String ()
+    origConstNameRepetitionError =
+        Left $ "Following constructors are mapped to multiple targets: "
+        <> intercalate ", " repeatedOrigConstNames
+
+    newNameRepetitionError :: Either String ()
+    newNameRepetitionError =
+        Left $ "Following aliases names are duplicated: "
+        <> intercalate ", " repeatedNewNames
+
+repeatedBy :: (a -> a -> Bool) -> [a] -> ([a], [a])
+repeatedBy f = both reverse . go ([], [])
+  where
+    go (occurred, repeated') [] = (occurred, repeated')
+    go (occurred, repeated') (x:xs)
+        | isJust $ find (f x) repeated' = go (occurred, repeated') xs
+        | isJust $ find (f x) occurred = go (occurred, x:repeated') xs
+        | otherwise = go (x:occurred, repeated') xs
+
+    both f (a, b) = (f a, f b)
+
+repeated :: Eq a => [a] -> ([a], [a])
+repeated = both reverse . go ([], [])
+  where
+    go (occurred, repeated') [] = (occurred, repeated')
+    go (occurred, repeated') (x:xs)
+        | x `elem` repeated' = go (occurred, repeated') xs
+        | x `elem` occurred = go (occurred, x:repeated') xs
+        | otherwise = go (x:occurred, repeated') xs
+
+    both f (a, b) = (f a, f b)
+
+pairDeclAndAliases :: [DataDec] -> [Alias] -> Either String [(Alias, DataDec)]
+pairDeclAndAliases decls aliases = do
+    xs <- pairedAliases
+
+    if length (ocuredDecls xs) == length decls
+        then pairedAliases
+        else errDataDecl $ decls \\ ocuredDecls xs
+  where
+    pairedAliases = mapM pairAlias aliases
+    pairAlias a@Alias{..} =
+        maybe (errAlias a) (pure . (a, )) $ find (cmpNames originalName) decls
+
+    ocuredDecls :: [(Alias, DataDec)] -> [DataDec]
+    ocuredDecls = fst . repeatedDecls'
+
+    repeatedDecls :: [(Alias, DataDec)] -> [DataDec]
+    repeatedDecls = snd . repeatedDecls'
+
+    repeatedDecls' :: [(Alias, DataDec)] -> ([DataDec], [DataDec])
+    repeatedDecls' = repeatedBy (\a b -> declToName a == declToName b)
+        . fmap snd
+
+    errAlias Alias{..} = Left $ "Alias " <> newName
+        <> "doesn't have corresponding data declaration. "
         <> "Missing data declaration: " <> originalName
 
-    errDataDecl xs = fail $ "To many data declarations. Following data "
+    errDataDecl xs = Left $ "To many data declarations. Following data "
         <> "declarations are not accompanied by aliases: "
-        <> intercalate ", " (fmap declToName decls \\ xs)
+        <> intercalate ", " (fmap declToName xs)
 
-    cmpNames name (DataDec _ _ _ declHead _ _) =
-        name == declHeadName declHead
+    cmpNames name DataDec{..} =
+        name == declHeadName declarationHead
 
-    declToName (DataDec _ _ _ declHead _ _) = declHeadName declHead
+    declToName DataDec{..} = declHeadName declarationHead
 
     declHeadName (DHApp _ x _) = declHeadName x
     declHeadName (DHead _ name) = nameToString name
@@ -346,8 +422,6 @@ validateDeclsAndAliases decls aliases = do
 
     nameToString (Exts.Ident _ name) = name
     nameToString (Exts.Symbol _ name) = name
-
---    pairSrcAndAliases decls aliases =
 
 myToList :: DeclHead l -> [Exts.Name l]
 myToList decl =  myToList' decl []
@@ -400,39 +474,41 @@ createNewConstructors
     :: forall l
     . [TypeVariablePair]
     -> [Constructor]
-    -> QualConDecl l
-    -> Either String (QualConDecl l)
+    -> QualConDecl ()
+    -> Either String (QualConDecl ())
 createNewConstructors typeVarPairList conMappings oldCon =
     QualConDecl (annotation oldCon)
     <$> modifyTypeVar (typeVars oldCon)
     <*> pure (context oldCon)
     <*> newConDecl (conDecl oldCon)
   where
-    modifyTypeVar :: Maybe [TyVarBind l] -> Either String (Maybe [TyVarBind l])
+    modifyTypeVar
+        :: Maybe [TyVarBind ()]
+        -> Either String (Maybe [TyVarBind ()])
     modifyTypeVar = pure
 
-    annotation :: QualConDecl l -> l
-    annotation (QualConDecl l _ _ _) = l
+    annotation :: QualConDecl () -> ()
+    annotation (QualConDecl () _ _ _) = ()
 
-    typeVars :: QualConDecl l -> Maybe [TyVarBind l]
+    typeVars :: QualConDecl () -> Maybe [TyVarBind ()]
     typeVars (QualConDecl _ tvs _ _) = tvs
 
-    context :: QualConDecl l -> Maybe (Context l)
+    context :: QualConDecl () -> Maybe (Context ())
     context (QualConDecl _ _ cntx _) = cntx
 
-    conDecl :: QualConDecl l -> ConDecl l
+    conDecl :: QualConDecl () -> ConDecl ()
     conDecl (QualConDecl _ _ _ cdcl) = cdcl
 
     -- TODO:
     -- rmMappedTyVars
 
-    newConDecl :: ConDecl l -> Either String (ConDecl l)
-    newConDecl (ConDecl l name types) = ConDecl l
+    newConDecl :: ConDecl () -> Either String (ConDecl ())
+    newConDecl (ConDecl _ name types) = ConDecl ()
         <$> translateName name
         <*> translateTypes types
     newConDecl InfixConDecl{} =
         Left "Infix data constructor is not supported."
-    newConDecl (RecDecl l name records) = RecDecl l
+    newConDecl (RecDecl _ name records) = RecDecl ()
         <$> translateName name
         <*> processRecords records
       where
@@ -441,13 +517,12 @@ createNewConstructors typeVarPairList conMappings oldCon =
         processRecord (FieldDecl l2 names t) =
             FieldDecl l2 names <$> translateType t
 
-    -- TODO: l type variable to ()
-    translateName :: Exts.Name l -> Either String (Exts.Name l)
-    translateName (Exts.Ident l name) =
-        maybeToEither (nameError name) . fmap (Exts.Ident l)
+    translateName :: Exts.Name () -> Either String (Exts.Name ())
+    translateName (Exts.Ident _ name) =
+        maybeToEither (nameError name) . fmap (Exts.Ident ())
         $ lookup name conMappings
-    translateName (Exts.Symbol l name) =
-        maybeToEither (nameError name) . fmap (Exts.Symbol l)
+    translateName (Exts.Symbol _ name) =
+        maybeToEither (nameError name) . fmap (Exts.Symbol ())
         $ lookup name conMappings
 
     nameError name = "Can't find constructor \"" <> name <> "\" in constructor "
@@ -455,7 +530,7 @@ createNewConstructors typeVarPairList conMappings oldCon =
 
 --    translateRecords =
 
-    translateTypes :: [Type l] -> Either String [Type l]
+    translateTypes :: [Type ()] -> Either String [Type ()]
     translateTypes types = mconcat
         <$> mapM (\v -> leftMaybeToError
             $ runReaderT (translateType v) typeVarPairList) types

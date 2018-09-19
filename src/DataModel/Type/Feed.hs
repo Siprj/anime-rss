@@ -119,15 +119,20 @@ data KWa a b c d e = Kwa
     }
   deriving (Show, Eq)
 
-data Dat = Dat
+-- data Dat = Dat
 
 ~~~
 
 alias GetAhojda = Ahojda Maybe Proxy DontModify DontModify DontModify:
     Ahojda => KwaGetAhojda
 
-conversion setAhojdaToGetAhojda = SetAhojda -> GetAhojda
-conversion getAhojdaToSetAhojda = GetAhojda -> SetAhojda
+alias GetKWa = KWa Maybe Proxy DontModify DontModify DontModify:
+    Kwa => Asdf
+alias SetKWa = KWa Maybe Proxy Maybe DontModify DontModify:
+    Kwa => Asdf2
+
+--conversion setAhojdaToGetAhojda = SetAhojda -> GetAhojda
+--conversion getAhojdaToSetAhojda = GetAhojda -> SetAhojda
 |]
 -- [genData|
 -- data (Eq a, Show b) => forall a. Ahojda a b c d e = Ahojda
@@ -140,7 +145,7 @@ conversion getAhojdaToSetAhojda = GetAhojda -> SetAhojda
 --
 -- ~~~
 --
--- alias Ahojda Maybe Identity : Ahojda => GetAhojda
+-- alias Ahojda Maybe Identity : Ahojda => GetAhojda | Ahojda => Tatuin
 --
 -- conversion setAhojdaToGetAhojda = SetAhojda -> GetAhojda
 -- conversion getAhojdaToSetAhojda = GetAhojda -> SetAhojda

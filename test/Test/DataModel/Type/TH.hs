@@ -1,7 +1,10 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Test.DataModel.Type.TH where
 
+import Control.Exception (SomeException, try)
+import Control.Monad ((>>=))
 import Control.Monad.Trans.Reader (Reader, ReaderT(runReaderT), ask)
 import Data.Either (Either(Left, Right))
 import Data.Function (($), (.))
@@ -40,15 +43,21 @@ import Language.Haskell.Exts.Syntax
     , QName(UnQual, Qual, Special)
     , FieldDecl(FieldDecl)
     )
+import Language.Haskell.TH (runQ)
+import System.IO (IO)
+import Test.Tasty.HUnit ((@=?), Assertion, testCase, assertFailure)
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.HUnit ((@=?), Assertion, testCase)
+import Text.Show (show)
 
 import DataModel.Type.TH
-    ( TypeVariable(Proxy, Identity, DontModify, Maybe)
+    ( Alias(Alias)
+    , Ast(Ast)
+    , TypeVariable(Proxy, Identity, DontModify, Maybe)
     , TypeVariablePair
     , createNewDeclHead
     , renameTyVar
     , translateType
+    , checkAstForDuplicities
     )
 
 
@@ -202,6 +211,77 @@ successfulTranslationTest :: Assertion
 successfulTranslationTest = Right (newDataDecl, translationList)
     @=? createNewDeclHead newName dataDecl typeVarList
 
+duplicities1 :: Ast
+duplicities1 = Ast [Alias "Foo" "Bar" [] [], Alias "Foo" "Bar" [] []] []
+
+duplicitiesResult1 :: Either String ()
+duplicitiesResult1 = Left "Following aliases names are duplicated: Foo"
+
+testDuplicities1 :: Assertion
+testDuplicities1 = duplicitiesResult1 @=? checkAstForDuplicities duplicities1
+
+duplicities2 :: Ast
+duplicities2 = Ast [Alias "Foo" "Bar" [] [("Asdf", "Kwa"), ("Asdf", "Kwa2")]] []
+
+duplicitiesResult2 :: Either String ()
+duplicitiesResult2 =
+    Left "Following constructors are mapped to multiple targets: Asdf"
+
+testDuplicities2 :: Assertion
+testDuplicities2 = duplicitiesResult2 @=? checkAstForDuplicities duplicities2
+
+duplicities3 :: Ast
+duplicities3 = Ast [Alias "Foo" "Bar" [] [("Asdf", "Kwa"), ("Asdf2", "Kwa")]] []
+
+duplicitiesResult3 :: Either String ()
+duplicitiesResult3 =
+    Left "Following constructors names are duplicated: Kwa"
+
+testDuplicities3 :: Assertion
+testDuplicities3 = duplicitiesResult3 @=? checkAstForDuplicities duplicities3
+
+duplicities4 :: Ast
+duplicities4 = Ast
+    [ Alias "Foo" "Bar" [Identity] [("Asdf", "Kwa2"), ("Asdf2", "Kwa1")]
+    , Alias "Foo2" "Bar" [Proxy] [("Asdf", "Kwa1"), ("Asdf2", "Kwa3")]
+    ]
+    []
+
+duplicitiesResult4 :: Either String ()
+duplicitiesResult4 =
+    Left "Following constructors names are duplicated: Kwa1"
+
+testDuplicities4 :: Assertion
+testDuplicities4 = duplicitiesResult4 @=? checkAstForDuplicities duplicities4
+
+duplicities5 :: Ast
+duplicities5 = Ast
+    [ Alias "Foo" "Bar" [Proxy] [("Asdf", "Kwa1"), ("Asdf2", "Kwa2")]
+    , Alias "Foo2" "Bar" [Proxy] [("Asdf", "Kwa3"), ("Asdf2", "Kwa4")]
+    ]
+    []
+
+duplicitiesResult5 :: Either String ()
+duplicitiesResult5 = Right ()
+
+testDuplicities5 :: Assertion
+testDuplicities5 = duplicitiesResult5 @=? checkAstForDuplicities duplicities5
+
+duplicities6 :: Ast
+duplicities6 = Ast
+    [ Alias "Foo" "Bar" [Identity] [("Asdf", "Kwa1"), ("Asdf2", "Kwa2")]
+    , Alias "Foo2" "Bar" [Proxy] [("Asdf", "Kwa3"), ("Asdf2", "Kwa4")]
+    ]
+    []
+
+duplicitiesResult6 :: Either String ()
+duplicitiesResult6 = Right ()
+
+testDuplicities6 :: Assertion
+testDuplicities6 = duplicitiesResult6 @=? checkAstForDuplicities duplicities6
+
+-- TODO: Tests for pairDeclAndAliases
+
 tests :: TestTree
 tests = testGroup "DataModel.Type.TH"
     [ testGroup "createNewDeclHead"
@@ -216,5 +296,11 @@ tests = testGroup "DataModel.Type.TH"
         , testCase "translateType-2" translateTypeTest2
         , testCase "translateType-3" translateTypeTest3
         , testCase "translateType-4" translateTypeTest4
+        , testCase "duplicities-1" testDuplicities1
+        , testCase "duplicities-2" testDuplicities2
+        , testCase "duplicities-3" testDuplicities3
+        , testCase "duplicities-4" testDuplicities4
+        , testCase "duplicities-5" testDuplicities5
+        , testCase "duplicities-6" testDuplicities6
         ]
     ]
