@@ -37,7 +37,19 @@ import Data.Eq (Eq, (==))
 import Data.Foldable (find, length)
 import Data.Function ((.), ($))
 import Data.Functor (fmap, void)
-import Data.List (repeat, zip, unzip, reverse, take, lookup, head)
+import Data.List
+    ( (\\)
+    , head
+    , intercalate
+    , length
+    , lookup
+    , nub
+    , repeat
+    , reverse
+    , take
+    , unzip
+    , zip
+    )
 import Data.Maybe (Maybe(Just, Nothing), maybe, isJust, catMaybes)
 import Data.Monoid ((<>), mconcat)
 import Data.Ord ((<))
@@ -50,10 +62,11 @@ import Data.Traversable (sequence)
 import Data.Void (Void)
 import GHC.Generics (Generic)
 import Language.Haskell.Exts.Parser
-    (ParseResult(ParseOk, ParseFailed), parseDecl)
+    (ParseResult(ParseOk, ParseFailed), parseDecl, parseModule)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.Syntax
-    ( ConDecl(ConDecl, InfixConDecl, RecDecl)
+    ( Module(Module, XmlPage, XmlHybrid)
+    , ConDecl(ConDecl, InfixConDecl, RecDecl)
     , Context
     , Decl(DataDecl), DataOrNew(DataType)
     , DeclHead(DHead, DHInfix, DHParen, DHApp)
@@ -87,6 +100,8 @@ import qualified Language.Haskell.TH as TH (Name)
 import Language.Haskell.TH
     ( Dec
     , Q
+    , mkName
+    , reify
     , reportError
     , runIO
     )
@@ -250,38 +265,70 @@ quoteDec' :: String -> Q [Dec]
 quoteDec' str = do
     (haskellString, ast) <- either parserFailed pure
         $ parse splitToHaskellStringAndAST "" str
-    decl <- failOnError $ parseDecl haskellString
-    runIO . writeFile "/tmp/pokus.txt" $ pShow $ fmap (\_-> ()) decl
-    ret <- generateDecl decl ast
-    runIO . writeFile "/tmp/pokus2.txt" $ pShow ret
-    pure ret
+    decls <- toDecls $ parseModule haskellString
+
+    validateDeclsAndAliases decls $ aliases ast
+    runIO . writeFile "/tmp/pokus.txt" $ pShow $ fmap (\_-> ()) decls
+--    ret <- mconcat <$> mapM (generateDataDec ast) decls
+--    runIO . writeFile "/tmp/pokus2.txt" $ pShow ret
+--    pure ret
+    pure []
   where
     parserFailed = fail . parseErrorPretty' str
 
-    failOnError = \case
+    toDecls = \case
         ParseFailed _loc str' -> fail str'
-        ParseOk v -> do
-            -- reportError . unpack $ pShow v
-            validateDecl v
+        ParseOk (Module _ _ _ _ decls) -> pure decls
+        ParseOk _ -> fail "Not a valid haskell code."
 
-    -- | Ensure that our declaration contains data declaration and fail
-    -- otherwise.
-    validateDecl :: Decl l -> Q (Decl l)
-    validateDecl v@DataDecl{} = pure v
-    validateDecl _ = fail "Only data declaration is supported!"
-
-    generateDecl :: (Show l) => Decl l -> Ast -> Q [Dec]
-    generateDecl (DataDecl l don cntx head' consts der) Ast{..} = do
-        (newDeclHead, tvPairs) <- eitherToQ $ createNewDeclHead newName' head' tv
-        newConsts <- eitherToQ $ mapM (createNewConstructors tvPairs cm) consts
+    generateDataDec :: Show l => Alias -> Decl l -> Q [Dec]
+    generateDataDec Alias {..} (DataDecl l don cntx head' consts der) = do
+        (newDeclHead, tvPairs) <-
+            eitherToQ $ createNewDeclHead newName' head' typeVariables
+        newConsts <- eitherToQ
+            $ mapM (createNewConstructors tvPairs constructorMapping) consts
 
         runIO . writeFile "/tmp/pokus3.txt" $ pShow $ fmap (\_-> ()) $ DataDecl l don cntx newDeclHead newConsts der
         pure . toDecs $ DataDecl l don cntx newDeclHead newConsts der
       where
         -- TODO: Pair aliases and Decls. Head in following lines is wrong.
-        newName' = Exts.Ident l $ (newName :: Alias -> Name) $ head aliases
-        tv = typeVariables $ head aliases
-        cm = constructorMapping $ head aliases
+        newName' = Exts.Ident l  newName
+    generateDecl _ _ = fail "Only data/newtype declaration are supported!"
+
+validateDeclsAndAliases :: [Decl l] -> [Alias] -> Q ()
+validateDeclsAndAliases decls aliases = do
+    xs <- (nub . fmap declToName) <$> mapM validateAlias aliases
+    if length xs == length decls
+       then pure ()
+       else errDataDecl xs
+  where
+    validateAlias a@Alias{..} =
+        maybe (errAlias a) pure $ find (cmpNames originalName) decls
+
+    errAlias Alias{..} = fail $ "Alias " <> newName
+        <> "doesn't have coresponding data declaration. "
+        <> "Missing data declaration: " <> originalName
+
+    errDataDecl xs = fail $ "To many data declarations. Following data "
+        <> "declarations are not accompanied by aliases: "
+        <> intercalate ", " (fmap declToName decls \\ xs)
+
+    cmpNames name (DataDecl _ _ _ declHead _ _) =
+        name == declHeadName declHead
+
+-- TODO: Make new wrapper for only the data declaration. This can simplify some
+-- stuff.
+    declToName (DataDecl _ _ _ declHead _ _) = declHeadName declHead
+
+    declHeadName (DHApp _ x _) = declHeadName x
+    declHeadName (DHead _ name) = nameToString name
+    declHeadName (DHInfix _ _ name) = nameToString name
+    declHeadName (DHParen _ x) = declHeadName x
+
+    nameToString (Exts.Ident _ name) = name
+    nameToString (Exts.Symbol _ name) = name
+
+--    pairSrcAndAliases decls aliases =
 
 myToList :: DeclHead l -> [Exts.Name l]
 myToList decl =  myToList' decl []

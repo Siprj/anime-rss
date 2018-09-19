@@ -111,6 +111,16 @@ data Ahojda a b c d e = Ahojda
     }
   deriving (Show, Eq)
 
+data KWa a b c d e = Kwa
+    { kwa1 :: a URI
+    , kwa2 :: b Int
+    , kwa3 :: a (Maybe e)
+    , kwa4 :: b Text
+    }
+  deriving (Show, Eq)
+
+data Dat = Dat
+
 ~~~
 
 alias GetAhojda = Ahojda Maybe Proxy DontModify DontModify DontModify:
