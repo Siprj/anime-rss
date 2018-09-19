@@ -72,6 +72,7 @@ import Language.Haskell.Exts.Syntax
     , DeclHead(DHead, DHInfix, DHParen, DHApp)
     , QualConDecl(QualConDecl)
     , TyVarBind(UnkindedVar, KindedVar)
+    , Deriving
     , Type
         ( TyApp
         , TyBang
@@ -260,14 +261,35 @@ splitToHaskellStringAndAST = do
     ast <- parseAst
     pure (haskellStr, ast)
 
+data DataDec l = DataDec
+    { annotation :: l
+    , dataOrNew :: DataOrNew l
+    , context :: Maybe (Context l)
+    , declarationHead :: DeclHead l
+    , constructorDeclarations :: [QualConDecl l]
+    , derivings :: [Deriving l]
+    }
+
+toDataDec :: Decl l -> Q (DataDec l)
+toDataDec (DataDecl annotation dataOrNew context declHead const derivings) =
+    pure $ DataDec
+        { annotation
+        , dataOrNew
+        , context
+        , declarationHead = declHead
+        , constructorDeclarations = const
+        , derivings
+        }
+toDataDec _ = fail "Only data/newtype declaration are supported!"
+
 -- TODO: Remove runIO . writeFile ...
 quoteDec' :: String -> Q [Dec]
 quoteDec' str = do
     (haskellString, ast) <- either parserFailed pure
         $ parse splitToHaskellStringAndAST "" str
-    decls <- toDecls $ parseModule haskellString
-
+    decls <- toDecls (parseModule haskellString) >>= mapM toDataDec
     validateDeclsAndAliases decls $ aliases ast
+
     runIO . writeFile "/tmp/pokus.txt" $ pShow $ fmap (\_-> ()) decls
 --    ret <- mconcat <$> mapM (generateDataDec ast) decls
 --    runIO . writeFile "/tmp/pokus2.txt" $ pShow ret
@@ -281,8 +303,8 @@ quoteDec' str = do
         ParseOk (Module _ _ _ _ decls) -> pure decls
         ParseOk _ -> fail "Not a valid haskell code."
 
-    generateDataDec :: Show l => Alias -> Decl l -> Q [Dec]
-    generateDataDec Alias {..} (DataDecl l don cntx head' consts der) = do
+    generateDataDec :: Show l => Alias -> DataDec l -> Q [Dec]
+    generateDataDec Alias {..} (DataDec l don cntx head' consts der) = do
         (newDeclHead, tvPairs) <-
             eitherToQ $ createNewDeclHead newName' head' typeVariables
         newConsts <- eitherToQ
@@ -293,9 +315,8 @@ quoteDec' str = do
       where
         -- TODO: Pair aliases and Decls. Head in following lines is wrong.
         newName' = Exts.Ident l  newName
-    generateDecl _ _ = fail "Only data/newtype declaration are supported!"
 
-validateDeclsAndAliases :: [Decl l] -> [Alias] -> Q ()
+validateDeclsAndAliases :: [DataDec l] -> [Alias] -> Q ()
 validateDeclsAndAliases decls aliases = do
     xs <- (nub . fmap declToName) <$> mapM validateAlias aliases
     if length xs == length decls
@@ -313,12 +334,10 @@ validateDeclsAndAliases decls aliases = do
         <> "declarations are not accompanied by aliases: "
         <> intercalate ", " (fmap declToName decls \\ xs)
 
-    cmpNames name (DataDecl _ _ _ declHead _ _) =
+    cmpNames name (DataDec _ _ _ declHead _ _) =
         name == declHeadName declHead
 
--- TODO: Make new wrapper for only the data declaration. This can simplify some
--- stuff.
-    declToName (DataDecl _ _ _ declHead _ _) = declHeadName declHead
+    declToName (DataDec _ _ _ declHead _ _) = declHeadName declHead
 
     declHeadName (DHApp _ x _) = declHeadName x
     declHeadName (DHead _ name) = nameToString name
