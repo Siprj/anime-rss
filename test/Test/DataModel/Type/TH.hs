@@ -52,16 +52,23 @@ import Text.Show (show)
 import DataModel.Type.TH
     ( Alias(Alias)
     , Ast(Ast)
+    , DataDec
+        ( DataDec
+        , constructorDeclarations
+        , context
+        , dataOrNew
+        , declarationHead
+        , derivings
+        )
     , TypeVariable(Proxy, Identity, DontModify, Maybe)
     , TypeVariablePair
     , createNewDeclHead
     , renameTyVar
     , translateType
     , checkAstForDuplicities
+    , pairDeclAndAliases
     )
 
-
--- TODO: More complex test with declarations containing parentheses.
 
 typeVariablePairs :: [TypeVariablePair]
 typeVariablePairs =
@@ -217,8 +224,8 @@ duplicities1 = Ast [Alias "Foo" "Bar" [] [], Alias "Foo" "Bar" [] []] []
 duplicitiesResult1 :: Either String ()
 duplicitiesResult1 = Left "Following aliases names are duplicated: Foo"
 
-testDuplicities1 :: Assertion
-testDuplicities1 = duplicitiesResult1 @=? checkAstForDuplicities duplicities1
+duplicitiesTest1 :: Assertion
+duplicitiesTest1 = duplicitiesResult1 @=? checkAstForDuplicities duplicities1
 
 duplicities2 :: Ast
 duplicities2 = Ast [Alias "Foo" "Bar" [] [("Asdf", "Kwa"), ("Asdf", "Kwa2")]] []
@@ -227,8 +234,8 @@ duplicitiesResult2 :: Either String ()
 duplicitiesResult2 =
     Left "Following constructors are mapped to multiple targets: Asdf"
 
-testDuplicities2 :: Assertion
-testDuplicities2 = duplicitiesResult2 @=? checkAstForDuplicities duplicities2
+duplicitiesTest2 :: Assertion
+duplicitiesTest2 = duplicitiesResult2 @=? checkAstForDuplicities duplicities2
 
 duplicities3 :: Ast
 duplicities3 = Ast [Alias "Foo" "Bar" [] [("Asdf", "Kwa"), ("Asdf2", "Kwa")]] []
@@ -237,8 +244,8 @@ duplicitiesResult3 :: Either String ()
 duplicitiesResult3 =
     Left "Following constructors names are duplicated: Kwa"
 
-testDuplicities3 :: Assertion
-testDuplicities3 = duplicitiesResult3 @=? checkAstForDuplicities duplicities3
+duplicitiesTest3 :: Assertion
+duplicitiesTest3 = duplicitiesResult3 @=? checkAstForDuplicities duplicities3
 
 duplicities4 :: Ast
 duplicities4 = Ast
@@ -251,8 +258,8 @@ duplicitiesResult4 :: Either String ()
 duplicitiesResult4 =
     Left "Following constructors names are duplicated: Kwa1"
 
-testDuplicities4 :: Assertion
-testDuplicities4 = duplicitiesResult4 @=? checkAstForDuplicities duplicities4
+duplicitiesTest4 :: Assertion
+duplicitiesTest4 = duplicitiesResult4 @=? checkAstForDuplicities duplicities4
 
 duplicities5 :: Ast
 duplicities5 = Ast
@@ -264,8 +271,8 @@ duplicities5 = Ast
 duplicitiesResult5 :: Either String ()
 duplicitiesResult5 = Right ()
 
-testDuplicities5 :: Assertion
-testDuplicities5 = duplicitiesResult5 @=? checkAstForDuplicities duplicities5
+duplicitiesTest5 :: Assertion
+duplicitiesTest5 = duplicitiesResult5 @=? checkAstForDuplicities duplicities5
 
 duplicities6 :: Ast
 duplicities6 = Ast
@@ -277,10 +284,83 @@ duplicities6 = Ast
 duplicitiesResult6 :: Either String ()
 duplicitiesResult6 = Right ()
 
-testDuplicities6 :: Assertion
-testDuplicities6 = duplicitiesResult6 @=? checkAstForDuplicities duplicities6
+duplicitiesTest6 :: Assertion
+duplicitiesTest6 = duplicitiesResult6 @=? checkAstForDuplicities duplicities6
 
--- TODO: Tests for pairDeclAndAliases
+aliasFoo :: Alias
+aliasFoo = Alias "Foo" "Bar" [Identity] [("Asdf", "Kwa1"), ("Asdf2", "Kwa2")]
+
+aliasFoo2 :: Alias
+aliasFoo2 = Alias "Foo2" "Bar" [Proxy] [("Asdf", "Kwa3"), ("Asdf2", "Kwa4")]
+
+aliasBar :: Alias
+aliasBar = Alias "Bar" "Kwa" [Proxy] [("Asdf", "Kwa3"), ("Asdf2", "Kwa4")]
+
+dataDecBar :: DataDec
+dataDecBar = DataDec
+    { dataOrNew = DataType ()
+    , context = Nothing
+    , declarationHead = DHApp ()
+        (DHead () (Ident () "Bar"))
+        (UnkindedVar () (Ident () "a"))
+    , constructorDeclarations =
+        [ QualConDecl () Nothing Nothing
+            ( RecDecl () (Ident () "Asdf")
+                [ FieldDecl () [Ident () "ahoj1"]
+                    ( TyApp () (TyVar () (Ident () "a"))
+                        (TyCon () (UnQual () (Ident () "URI")))
+                    )
+                ]
+            )
+        ]
+    , derivings = []
+    }
+
+dataDecBaz :: DataDec
+dataDecBaz = DataDec
+    { dataOrNew = DataType ()
+    , context = Nothing
+    , declarationHead = DHApp ()
+        (DHead () (Ident () "Baz"))
+        (UnkindedVar () (Ident () "b"))
+    , constructorDeclarations =
+        [ QualConDecl () Nothing Nothing
+            ( RecDecl () (Ident () "Asdf")
+                [ FieldDecl () [Ident () "ahoj1"]
+                    ( TyApp () (TyVar () (Ident () "b"))
+                        (TyCon () (UnQual () (Ident () "URI")))
+                    )
+                ]
+            )
+        ]
+    , derivings = []
+    }
+
+pairDeclAndAliasesTest1 :: Assertion
+pairDeclAndAliasesTest1 = pairDeclAndAliasesResult1
+    @=? pairDeclAndAliases [dataDecBar] [aliasFoo, aliasFoo2]
+
+pairDeclAndAliasesResult1 :: Either String [(Alias, DataDec)]
+pairDeclAndAliasesResult1 =
+    Right [(aliasFoo, dataDecBar), (aliasFoo2, dataDecBar)]
+
+pairDeclAndAliasesTest2 :: Assertion
+pairDeclAndAliasesTest2 = pairDeclAndAliasesResult2
+    @=? pairDeclAndAliases [dataDecBar, dataDecBaz] [aliasFoo, aliasFoo2]
+
+pairDeclAndAliasesResult2 :: Either String [(Alias, DataDec)]
+pairDeclAndAliasesResult2 = Left
+    $ "To many data declarations. Following data declarations are not "
+    <> "accompanied by aliases: Baz"
+
+pairDeclAndAliasesTest3 :: Assertion
+pairDeclAndAliasesTest3 = pairDeclAndAliasesResult3
+    @=? pairDeclAndAliases [dataDecBar] [aliasBar]
+
+pairDeclAndAliasesResult3 :: Either String [(Alias, DataDec)]
+pairDeclAndAliasesResult3 = Left
+    $ "Alias Bardoesn't have corresponding data declaration. Missing data "
+    <> "declaration: Kwa"
 
 tests :: TestTree
 tests = testGroup "DataModel.Type.TH"
@@ -296,11 +376,14 @@ tests = testGroup "DataModel.Type.TH"
         , testCase "translateType-2" translateTypeTest2
         , testCase "translateType-3" translateTypeTest3
         , testCase "translateType-4" translateTypeTest4
-        , testCase "duplicities-1" testDuplicities1
-        , testCase "duplicities-2" testDuplicities2
-        , testCase "duplicities-3" testDuplicities3
-        , testCase "duplicities-4" testDuplicities4
-        , testCase "duplicities-5" testDuplicities5
-        , testCase "duplicities-6" testDuplicities6
+        , testCase "duplicities-1" duplicitiesTest1
+        , testCase "duplicities-2" duplicitiesTest2
+        , testCase "duplicities-3" duplicitiesTest3
+        , testCase "duplicities-4" duplicitiesTest4
+        , testCase "duplicities-5" duplicitiesTest5
+        , testCase "duplicities-6" duplicitiesTest6
+        , testCase "pairDeclAndAliases-1" pairDeclAndAliasesTest1
+        , testCase "pairDeclAndAliases-2" pairDeclAndAliasesTest2
+        , testCase "pairDeclAndAliases-3" pairDeclAndAliasesTest3
         ]
     ]

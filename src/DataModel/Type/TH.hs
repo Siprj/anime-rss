@@ -147,20 +147,20 @@ data Alias = Alias
     , typeVariables :: [TypeVariable]
     , constructorMapping :: [Constructor]
     }
-  deriving (Show)
+  deriving (Show, Eq)
 
 data Conversion = Conversion
     { name :: Name
     , from :: Name
     , to :: Name
     }
-  deriving (Show)
+  deriving (Show, Eq)
 
 data Ast = Ast
     { aliases :: [Alias]
     , conversions :: [Conversion]
     }
-  deriving (Show)
+  deriving (Show, Eq)
 
 type Parser = Parsec Void String
 
