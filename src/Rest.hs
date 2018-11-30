@@ -16,12 +16,11 @@ module Rest
 
 import Control.Applicative (pure)
 import Control.Exception (Exception, throw)
-import Control.Monad (Monad)
 import Control.Monad.Freer (Eff)
 import Control.Monad.Freer.Reader (Reader, ask)
 import Data.ByteString.Lazy (ByteString)
 import Data.Default(def)
-import Data.Either
+import Data.Either (Either(Right, Left))
 import Data.Function (($), (.))
 import Data.Functor (fmap)
 import Data.Maybe (Maybe(Just, Nothing), maybe)
@@ -72,7 +71,7 @@ import Text.XML
 import System.IO (IO)
 
 import qualified DataModel.Type.Feed as DataModel
-    (Feed(Feed, name, url, date, imgUrl, episodeNumber))
+    (Feed, Feed'(Feed', name, url, date, imgUrl, episodeNumber))
 import DataModel.Service (DataModel, listFeeds)
 
 
@@ -144,7 +143,7 @@ rssApiHandler = do
             $ maybe "" (formatTime defaultTimeLocale rfc822DateFormat) date
 
     toEntry :: DataModel.Feed -> Entry
-    toEntry DataModel.Feed{..} = toEntry'
+    toEntry DataModel.Feed'{..} = toEntry'
         { entryLinks = [nullLink $ showT url]
         , entrySummary = Just . HTMLString
         -- TODO: Use some HTML template language

@@ -1,162 +1,129 @@
-{-# LANGUAGE DisambiguateRecordFields #-}
-{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module DataModel.Type.Feed
-    ( Feed(..)
-    , SetFeed(..)
-    , Feed'(..)
-    , Kwa(..)
+    ( Feed'(..)
+    , Feed
+    , SetFeed
+    , setFeedToFeed
     )
   where
 
+import Control.Applicative ((<$>), (<*>))
 import Data.Data (Data)
 import Data.Eq (Eq)
+import Data.Function (($))
 import Data.Int (Int)
 import Data.SafeCopy
     ( Migrate(MigrateFrom, migrate)
-    , deriveSafeCopy
+    , SafeCopy(putCopy, getCopy, kind, version)
+    , contain
     , extension
+    , safeGet
+    , safePut
     )
 import Data.Text (Text)
-import Data.Maybe (Maybe)
 import Data.Time (UTCTime)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import Network.URI (URI)
 import Text.Show (Show)
-import Text.Read (Read)
 
+import DataModel.Type.Apply (Apply, ApplyType(Drop, Keep))
 import DataModel.OrphanInstances ()
 import DataModel.Type.Old.Feed
-    ( Feed_v0(Feed_v0, name_v0, url_v0, date_v0, imgUrl_v0)
-    , SetFeed_v0(SetFeed_v0, setFeedName_v0, setFeedUrl_v0, setFeedImgUrl_v0)
+    ( Feed_v1(Feed_v1, name_v1, url_v1, date_v1, imgUrl_v1, episodeNumber_v1)
+    , SetFeed_v1(SetFeed_v1, setFeedName_v1, setFeedUrl_v1, setFeedImgUrl_v1, setFeedEpisodeNumber_v1)
     )
 
-import DataModel.Type.TH (genData)
-import qualified DataModel.Type.TH as TH (TypeVariable(Identity, Proxy, DontModify))
 
-
-data Feed = Feed
-    { name :: Text
-    , url :: URI
-    , date :: UTCTime
-    , imgUrl :: URI
-    , episodeNumber :: Int
+data Feed' a b = Feed'
+    { name :: Apply a Text
+    , url :: Apply a URI
+    , imgUrl :: Apply a URI
+    , episodeNumber :: Apply a Int
+    , date :: Apply b UTCTime
     }
-  deriving (Eq, Typeable, Generic, Data, Show)
+  deriving (Generic, Typeable)
 
-$(deriveSafeCopy 1 'extension ''Feed)
+type SetFeed = Feed' 'Keep 'Drop
 
-instance Migrate Feed where
-    type MigrateFrom Feed = Feed_v0
-    migrate Feed_v0{..} = Feed
-        { name = name_v0
-        , url = url_v0
-        , imgUrl = imgUrl_v0
-        , date = date_v0
-        , episodeNumber = 0
-        }
+deriving instance Show SetFeed
+deriving instance Eq SetFeed
+deriving instance Data SetFeed
 
-data SetFeed = SetFeed
-    { setFeedName :: Text
-    , setFeedUrl :: URI
-    , setFeedImgUrl :: URI
-    , setFeedEpisodeNumber :: Int
-    }
+instance SafeCopy SetFeed where
+    version = 2
+    kind = extension
+    putCopy Feed'{..} = contain $ do
+        safePut name
+        safePut url
+        safePut imgUrl
+        safePut episodeNumber
+        safePut date
+
+    getCopy = contain $ Feed'
+        <$> safeGet
+        <*> safeGet
+        <*> safeGet
+        <*> safeGet
+        <*> safeGet
 
 instance Migrate SetFeed where
-    type MigrateFrom SetFeed = SetFeed_v0
-    migrate SetFeed_v0{..} = SetFeed
-        { setFeedName = setFeedName_v0
-        , setFeedUrl = setFeedUrl_v0
-        , setFeedImgUrl = setFeedImgUrl_v0
-        , setFeedEpisodeNumber = 0
+    type MigrateFrom SetFeed = SetFeed_v1
+    migrate SetFeed_v1{..} = Feed'
+        { name = setFeedName_v1
+        , url = setFeedUrl_v1
+        , imgUrl = setFeedImgUrl_v1
+        , episodeNumber = setFeedEpisodeNumber_v1
+        , date = ()
         }
 
-newtype Kwa a = Kwa a
+type Feed = Feed' 'Keep 'Keep
 
---data (a :/ b) c = (:/)
---    { pokpoku1 :: a
---    , pokpoku2 :: b
---    , pokpoku3 :: c
---    }
+deriving instance Show Feed
+deriving instance Eq Feed
+deriving instance Data Feed
 
-data Feed' f c a b d e g h = Feed'
-    { name :: a Text
-    , url :: c URI
-    , blabla :: g h
-    , date :: b UTCTime
-    , imgUrl :: a URI
-    , ahoj :: Text
-    , episodeNumber :: a Int
-    , kwa :: c (Kwa d)
-    }
+instance Migrate Feed where
+    type MigrateFrom Feed = Feed_v1
+    migrate Feed_v1{..} = Feed'
+        { name = name_v1
+        , url = url_v1
+        , imgUrl = imgUrl_v1
+        , episodeNumber = episodeNumber_v1
+        , date = date_v1
+        }
 
-[genData|
-data Ahojda a b c d e = Ahojda
-    { ahoj1 :: a URI
-    , ahoj2 :: b Int
-    , ahoj3 :: a (Maybe e)
-    , ahoj4 :: b Text
-    }
-  deriving (Show, Eq)
+instance SafeCopy Feed where
+    version = 2
+    kind = extension
+    putCopy Feed'{..} = contain $ do
+        safePut name
+        safePut url
+        safePut imgUrl
+        safePut episodeNumber
+        safePut date
 
-data KWa a b c d e = Kwa
-    { kwa1 :: a URI
-    , kwa2 :: b Int
-    , kwa3 :: a (Maybe e)
-    , kwa4 :: b Text
-    }
-  deriving (Show, Eq)
+    getCopy = contain $ Feed'
+        <$> safeGet
+        <*> safeGet
+        <*> safeGet
+        <*> safeGet
+        <*> safeGet
 
--- data Dat = Dat
-
-~~~
-
-alias GetAhojda = Ahojda Maybe Proxy DontModify DontModify DontModify:
-    Ahojda => KwaGetAhojda
-
-alias GetKWa = KWa Maybe Proxy DontModify DontModify DontModify:
-    Kwa => Asdf
-alias SetKWa = KWa Maybe Proxy Maybe DontModify DontModify:
-    Kwa => Asdf2
-
---conversion setAhojdaToGetAhojda = SetAhojda -> GetAhojda
---conversion getAhojdaToSetAhojda = GetAhojda -> SetAhojda
-|]
--- [genData|
--- data (Eq a, Show b) => forall a. Ahojda a b c d e = Ahojda
---     { ahoj1 :: (a -> d)
---     , ahoj2 :: b Int
---     , ahoj3 :: c (URI e)
---     , ahoj4 :: Maybe Text
---     }
---   deriving (Show, Read, Eq)
---
--- ~~~
---
--- alias Ahojda Maybe Identity : Ahojda => GetAhojda | Ahojda => Tatuin
---
--- conversion setAhojdaToGetAhojda = SetAhojda -> GetAhojda
--- conversion getAhojdaToSetAhojda = GetAhojda -> SetAhojda
--- |]
-
-
---  data Kwa a b c = Kwa
---      { kwa1 :: a Int
---      , kwa2 :: b Text
---      , kwa3 :: c URI
---      }
---    deriving(Eq, Show, Read)
-
-$(deriveSafeCopy 1 'extension ''SetFeed)
+setFeedToFeed :: UTCTime -> SetFeed -> Feed
+setFeedToFeed date' v = v{date = date'}
