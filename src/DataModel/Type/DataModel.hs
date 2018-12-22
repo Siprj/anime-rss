@@ -28,7 +28,7 @@ import DataModel.Type.Feed (Feed)
 
 data DataModel = DataModel
     { feeds :: Vector Feed
-    , lastModification :: Maybe UTCTime
+    , lastFeedsModification :: Maybe UTCTime
     }
   deriving (Eq, Typeable, Generic, Data, Show)
 

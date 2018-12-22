@@ -20,7 +20,8 @@ import Data.Maybe (Maybe(Just), maybe)
 import Data.Time (UTCTime)
 import Data.Vector (Vector, cons, find)
 
-import DataModel.Type.DataModel (DataModel(DataModel, feeds, lastModification))
+import DataModel.Type.DataModel
+    (DataModel(DataModel, feeds, lastFeedsModification))
 import DataModel.Type.Feed
     ( Feed'(url)
     , SetFeed
@@ -37,11 +38,11 @@ addFeedIfUnique setFeed date' = do
     prependFeed :: Vector Feed -> Update DataModel ()
     prependFeed feedVector = put DataModel
         { feeds = cons (setFeedToFeed date' setFeed) feedVector
-        , lastModification = Just date'
+        , lastFeedsModification = Just date'
         }
     compareFeeds v = url v == url setFeed
 
 listFeeds :: Query DataModel (Vector Feed, Maybe UTCTime)
 listFeeds = do
     DataModel{..} <- ask
-    pure (feeds, lastModification)
+    pure (feeds, lastFeedsModification)
