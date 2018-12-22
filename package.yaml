@@ -1,0 +1,113 @@
+name: gogoanime-rss
+version: 0.1.0.0
+github: "Siprj/gogoanime-rss"
+license: BSD3
+author: "Jan Sipr"
+maintainer: "sipr.jan@gmail.com"
+copyright: "2018 Jan Sipr"
+
+extra-source-files:
+  - README.md
+  - ChangeLog.md
+
+# Metadata used when publishing your package
+synopsis: Rss feed generator for gogoanime.io
+category: Web
+
+description: >
+    Please see the README on Github at 
+    <https://github.com/Siprj/gogoanime-rss#readme>
+
+flags:
+  pedantic:
+    description: Pass additional warning flags and -Werror to GHC.
+    default: True
+    manual: True
+
+dependencies:
+  - base >= 4.7 && < 5
+  - acid-state
+  - attoparsec
+  - bytestring
+  - containers
+  - data-default
+  - feed
+  - freer-effects
+  - HandsomeSoup
+  - haskell-src-exts
+  - haskell-src-meta
+  - http-media
+  - hxt
+  - hxt-css
+  - lens
+  - megaparsec
+  - mtl
+  - network-uri
+  - parser-combinators
+  - pretty-simple
+  - safecopy
+  - servant
+  - servant-server
+  - split
+  - stm
+  - template-haskell
+  - transformers
+  - text
+  - time
+  - vector
+  - wreq
+  - xml
+  - xml-conduit
+
+library:
+  source-dirs: src
+  ghc-options:
+    - -Wall
+    - -Wimplicit-prelude
+    - -Wmissing-import-lists
+  when:
+    - condition: flag(pedantic)
+      ghc-options: -Werror
+
+executables:
+  gogoanime-rss:
+    main: Main.hs
+    source-dirs: app
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -Wimplicit-prelude
+      - -Wmissing-import-lists
+    dependencies:
+      - gogoanime-rss
+      - tasty
+      - tasty-hunit
+
+tests:
+  hlint-test-exe:
+    main: hlint-test-exe.hs
+    source-dirs: test
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -Wimplicit-prelude
+      - -Wmissing-import-lists
+    dependencies:
+      - gogoanime-rss
+      - hlint-test >= 0.1.0.0
+
+  gogoanime-rss-test:
+    main: Spec.hs
+    source-dirs:
+      - test
+      - src
+    ghc-options:
+      - -threaded
+      - -Wall
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -Wimplicit-prelude
+      - -Wmissing-import-lists
+    cpp-options: -DTEST
