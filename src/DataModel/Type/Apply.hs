@@ -11,6 +11,7 @@ module DataModel.Type.Apply
 import Data.Maybe (Maybe)
 import Data.Kind (Type)
 
+
 data ApplyType
     = Drop
     | Optional

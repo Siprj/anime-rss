@@ -10,39 +10,51 @@ module DataModel.Acid.Feed
     )
   where
 
-import Control.Applicative (pure)
-import Control.Monad.Reader (ask)
-import Control.Monad.State (get, put)
+import Control.Applicative ((<*>))
+import Control.Lens
+    ( (%=)
+    , (.=)
+    , ReifiedGetter(Getter)
+    , runGetter
+    , use
+    , view
+    )
+import Control.Monad (when)
 import Data.Acid (Query, Update)
+import Data.Bool (Bool)
 import Data.Eq ((==))
-import Data.Function (($), (.), const)
-import Data.Maybe (Maybe(Just), maybe)
+import Data.Function (($), (.))
+import Data.Functor ((<$>))
+import Data.Maybe (Maybe(Just), isJust)
 import Data.Time (UTCTime)
 import Data.Vector (Vector, cons, find)
 
 import DataModel.Type.DataModel
-    (DataModel(DataModel, feeds, lastFeedsModification))
+    ( DataModel
+    , feeds
+    , lastFeedsModification
+    )
 import DataModel.Type.Feed
-    ( Feed'(url)
+    ( Feed'(_url)
     , SetFeed
     , Feed
     , setFeedToFeed
     )
 
+
 addFeedIfUnique :: SetFeed -> UTCTime -> Update DataModel ()
 addFeedIfUnique setFeed date' = do
-    DataModel{..} <- get
-    maybe (prependFeed feeds) (pure . const ())
-        $ find compareFeeds feeds
+    feeds' <- use feeds
+    when (isJust $ find compareFeeds feeds') $ do
+        feeds %= prependFeed
+        lastFeedsModification .= Just date'
   where
-    prependFeed :: Vector Feed -> Update DataModel ()
-    prependFeed feedVector = put DataModel
-        { feeds = cons (setFeedToFeed date' setFeed) feedVector
-        , lastFeedsModification = Just date'
-        }
-    compareFeeds v = url v == url setFeed
+    prependFeed :: Vector Feed -> Vector Feed
+    prependFeed feedVector = cons (setFeedToFeed date' setFeed) feedVector
+
+    compareFeeds :: Feed -> Bool
+    compareFeeds v = _url v == _url setFeed
 
 listFeeds :: Query DataModel (Vector Feed, Maybe UTCTime)
 listFeeds = do
-    DataModel{..} <- ask
-    pure (feeds, lastFeedsModification)
+    view . runGetter $ (,) <$> Getter feeds <*> Getter lastFeedsModification

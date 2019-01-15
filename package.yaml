@@ -83,6 +83,9 @@ executables:
       - gogoanime-rss
       - tasty
       - tasty-hunit
+      - wreq
+      - warp
+      - wai
 
 tests:
   hlint-test-exe:

@@ -27,11 +27,11 @@ import System.IO (IO)
 import DataModel.Type.Feed
     ( Feed'
         ( Feed'
-        , name
-        , url
-        , imgUrl
-        , episodeNumber
-        , date
+        , _name
+        , _url
+        , _imgUrl
+        , _episodeNumber
+        , _date
         )
     )
 import DataModel.Service (DataModel, addFeedIfUnique)
@@ -48,9 +48,9 @@ runScraper time = do
     runScraper time
   where
     toSetFeed AnimeEntry{..} = Feed'
-        { name = title
-        , url = url
-        , imgUrl = imageUrl
-        , episodeNumber = episodeNumber
-        , date = ()
+        { _name = title
+        , _url = url
+        , _imgUrl = imageUrl
+        , _episodeNumber = episodeNumber
+        , _date = ()
         }

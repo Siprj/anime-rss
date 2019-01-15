@@ -53,7 +53,7 @@ import Scraper.Parser.Type
 
 
 gogoanimeUrl :: URI
-gogoanimeUrl = $$(staticURI "https://ww1.gogoanime.io/")
+gogoanimeUrl = $$(staticURI "https://gogoanime.io/")
 
 getEntrisFromFronPage :: URI -> IO [AnimeEntry]
 getEntrisFromFronPage url = do

@@ -71,7 +71,7 @@ import Text.XML
 import System.IO (IO)
 
 import qualified DataModel.Type.Feed as DataModel
-    (Feed, Feed'(Feed', name, url, date, imgUrl, episodeNumber))
+    (Feed, Feed'(Feed', _name, _url, _date, _imgUrl, _episodeNumber))
 import DataModel.Service (DataModel, listFeeds)
 
 
@@ -144,17 +144,17 @@ rssApiHandler = do
 
     toEntry :: DataModel.Feed -> Entry
     toEntry DataModel.Feed'{..} = toEntry'
-        { entryLinks = [nullLink $ showT url]
+        { entryLinks = [nullLink $ showT _url]
         , entrySummary = Just . HTMLString
         -- TODO: Use some HTML template language
-            $ "<div><a href=\"" <> showT url <> ">\"<img src=\"" <> showT imgUrl
-            <> "\"></div>"
+            $ "<div><a href=\"" <> showT _url <> ">\"<img src=\""
+            <> showT _imgUrl <> "\"></div>"
         }
       where
         toEntry' :: Entry
-        toEntry' = nullEntry (showT url)
-            (TextString $ name <> " [Episode: " <> showT episodeNumber <> "]")
-            .  pack $ formatTime defaultTimeLocale rfc822DateFormat date
+        toEntry' = nullEntry (showT _url)
+            (TextString $ _name <> " [Episode: " <> showT _episodeNumber <> "]")
+            .  pack $ formatTime defaultTimeLocale rfc822DateFormat _date
 
 showT :: Show a => a -> Text
 showT = pack . show
