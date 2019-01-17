@@ -58,6 +58,7 @@ dependencies:
   - wreq
   - xml
   - xml-conduit
+  - cryptonite
 
 library:
   source-dirs: src
