@@ -1,1 +1,1 @@
-# gogoanime-rss
+# anime-rss

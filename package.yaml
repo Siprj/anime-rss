@@ -1,4 +1,4 @@
-name: gogoanime-rss
+name: anime-rss
 version: 0.1.0.0
 github: "Siprj/gogoanime-rss"
 license: BSD3
@@ -16,7 +16,7 @@ category: Web
 
 description: >
     Please see the README on Github at 
-    <https://github.com/Siprj/gogoanime-rss#readme>
+    <https://github.com/Siprj/anime-rss#readme>
 
 flags:
   pedantic:
@@ -71,7 +71,7 @@ library:
       ghc-options: -Werror
 
 executables:
-  gogoanime-rss:
+  anime-rss:
     main: Main.hs
     source-dirs: app
     ghc-options:
@@ -81,7 +81,7 @@ executables:
       - -Wimplicit-prelude
       - -Wmissing-import-lists
     dependencies:
-      - gogoanime-rss
+      - anime-rss
       - tasty
       - tasty-hunit
       - wreq
@@ -99,10 +99,10 @@ tests:
       - -Wimplicit-prelude
       - -Wmissing-import-lists
     dependencies:
-      - gogoanime-rss
+      - anime-rss
       - hlint-test >= 0.1.0.0
 
-  gogoanime-rss-test:
+  anime-rss-test:
     main: Spec.hs
     source-dirs:
       - test
