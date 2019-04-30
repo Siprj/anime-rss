@@ -5,6 +5,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -13,25 +14,30 @@ module Crypto.PasswordStore
 --    )
   where
 
+import Control.Applicative (pure)
 import Crypto.KDF.Argon2
     ( Options(Options, version, variant, memory, parallelism, iterations)
     , Variant(Argon2id)
     , Version(Version13)
     , hash
     )
+import Crypto.Error (CryptoFailable)
 import Crypto.Random (getRandomBytes)
-import Control.Applicative (pure)
 import Data.Bits (shiftL)
-import Data.Int (Int)
+import Data.Bool (Bool)
 import Data.ByteString (ByteString)
+import Data.Eq ((==))
 import Data.Eq (Eq)
+import Data.Function (($))
+import Data.Functor ((<$>))
+import Data.Int (Int)
 import System.IO (IO)
 
 
 data HashParameters = HashParameters
-    { options :: Options
-    , outputHashSize :: Int
-    , salt :: ByteString
+    { hashParametersOptions :: Options
+    , hashParametersOutputHashSize :: Int
+    , hashParametersSalt :: ByteString
     }
   deriving (Eq)
 
@@ -60,9 +66,15 @@ hashPassword
     -> Options
     -> Int
     -- ^ Output hash size. Default is 32.
-    -> IO PasswordHash
+    -> IO (CryptoFailable PasswordHash)
 hashPassword password options hashSize = do
     salt <- getRandomBytes 16
-    pure ( HashParameters options hashSize salt
-        , hash options password salt hashSize
-        )
+    pure $ (HashParameters options hashSize salt, ) <$> hash options password salt hashSize
+
+verifyPassword
+    :: ByteString
+    -- ^ password
+    -> PasswordHash
+    -> CryptoFailable Bool
+verifyPassword password (HashParameters options hashSize salt, passwordHash) = do
+    (passwordHash ==) <$> hash options password salt hashSize
