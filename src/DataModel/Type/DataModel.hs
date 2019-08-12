@@ -10,7 +10,7 @@
 
 module DataModel.Type.DataModel
     ( DataModel(..)
-    , defaultDataModel
+    , createDefaultDataModel
     , feeds
     , users
     , usersIdCounter
@@ -19,6 +19,9 @@ module DataModel.Type.DataModel
   where
 
 import Control.Lens.TH (makeLenses)
+import Control.Applicative (pure)
+import Control.Monad ((>>=))
+import Crypto.Error (throwCryptoErrorIO)
 import Data.Eq (Eq)
 import Data.Function (($))
 import Data.Int (Int)
@@ -27,11 +30,13 @@ import Data.SafeCopy (base, deriveSafeCopy)
 import Data.Time (UTCTime)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector, fromList)
-import Data.IntMap (IntMap, singleton)
+import Data.Map.Strict (Map, singleton)
 import GHC.Generics (Generic)
+import System.IO (IO)
 import Text.Show (Show)
 
-import DataModel.Type.Id (Id(Id))
+import Crypto.PasswordStore (hashPassword, defaultOptions)
+import DataModel.Type.Id (toId, UserId)
 import DataModel.Type.Feed (Feed)
 import qualified DataModel.Type.User as User
     (User, User'(User', _id, _name, _email, _password))
@@ -39,7 +44,8 @@ import qualified DataModel.Type.User as User
 
 data DataModel = DataModel
     { _feeds :: Vector Feed
-    , _users :: IntMap User.User
+    , _users :: Map UserId User.User
+    , _userLastId :: UserId
     , _usersIdCounter :: Int
     , _lastFeedsModification :: Maybe UTCTime
     }
@@ -47,17 +53,20 @@ data DataModel = DataModel
 
 makeLenses ''DataModel
 
-defaultDataModel :: DataModel
-defaultDataModel = DataModel
-    { _feeds = fromList []
-    , _users = singleton 0 $ User.User'
-        { _id = Id 0
-        , _name = "Admin"
-        , _email = "admin@admin.com"
-        , _password = "asdf"
+createDefaultDataModel :: IO DataModel
+createDefaultDataModel = do
+    password <- hashPassword "password" defaultOptions 32
+        >>= throwCryptoErrorIO
+    pure $ DataModel
+        { _feeds = fromList []
+        , _users = singleton 0 $ User.User'
+            { _id = toId 0
+            , _name = "Admin"
+            , _email = "admin@admin.com"
+            , _password = password
+            }
+        , _usersIdCounter = 1
+        , _lastFeedsModification = Nothing
         }
-    , _usersIdCounter = 1
-    , _lastFeedsModification = Nothing
-    }
 
 $(deriveSafeCopy 0 'base ''DataModel)

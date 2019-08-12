@@ -22,23 +22,23 @@ module DataModel.Type.Id
 
 import Data.Data (Data)
 import Data.Function (($))
-import Data.Int (Int)
-import Data.Typeable (Typeable)
-import GHC.Generics (Generic)
-import Prelude (Num((+), (-), (*), negate, signum, abs, fromInteger), Eq)
 import Data.Functor ((<$>))
+import Data.Int (Int)
+import Data.Ord (Ord)
 import Data.SafeCopy
     ( SafeCopy(putCopy, getCopy, kind, version)
     , contain
     , base
     , safeGet
-    , safePut
     )
+import Data.Typeable (Typeable)
+import GHC.Generics (Generic)
+import Prelude (Num((+), (-), (*), negate, signum, abs, fromInteger), Eq)
 import Text.Show (Show)
 
 
 newtype Id a = Id Int
-  deriving (Generic, Eq, Typeable, Data, Show)
+  deriving (Generic, Eq, Typeable, Data, Show, Ord)
 
 instance Num (Id a) where
     (Id a) + (Id b) = Id $ a + b
@@ -64,3 +64,6 @@ fromId (Id a) = a
 
 toId :: Int -> Id a
 toId = Id
+
+startingId :: Id a
+startingId = 0

@@ -24,7 +24,6 @@ module DataModel.Type.User
 
 import Control.Applicative ((<*>))
 import Control.Lens.TH (makeLenses)
-import Data.ByteString (ByteString)
 import Data.Eq (Eq)
 import Data.Function (($))
 import Data.Functor ((<$>))
@@ -41,13 +40,14 @@ import Text.Show (Show)
 
 import DataModel.Type.Apply (Apply, ApplyType(Drop, Keep))
 import DataModel.Type.Id (UserId)
+import Crypto.PasswordStore (PasswordHash)
 
 
 data User' a = User'
     { _id :: Apply a UserId
     , _name :: Text
     , _email :: Text
-    , _password :: ByteString
+    , _password :: PasswordHash
     }
 
 makeLenses ''User'
@@ -61,7 +61,7 @@ deriving instance Show User
 deriving instance Eq User
 
 instance (SafeCopy (Apply a UserId)) => SafeCopy (User' a) where
-    version = 1
+    version = 0
     kind = base
     putCopy User'{..} = contain $ do
         safePut _id

@@ -1,10 +1,15 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -14,8 +19,9 @@ module Crypto.PasswordStore
 --    )
   where
 
+import GHC.Generics(Generic)
 import Control.Applicative (pure)
-import Crypto.KDF.Argon2
+import qualified Crypto.KDF.Argon2 as Crypto
     ( Options(Options, version, variant, memory, parallelism, iterations)
     , Variant(Argon2id)
     , Version(Version13)
@@ -31,17 +37,41 @@ import Data.Eq (Eq)
 import Data.Function (($))
 import Data.Functor ((<$>))
 import Data.Int (Int)
+import Data.Serialize (Serialize(put, get))
+import qualified Data.SafeCopy as SC
+    ( SafeCopy(putCopy, getCopy, kind, version)
+    , base
+    )
 import System.IO (IO)
+import Text.Show (Show)
 
 
 data HashParameters = HashParameters
-    { hashParametersOptions :: Options
+    { hashParametersOptions :: Crypto.Options
     , hashParametersOutputHashSize :: Int
     , hashParametersSalt :: ByteString
     }
-  deriving (Eq)
+  deriving (Eq, Show, Generic)
+
+instance Serialize HashParameters where
+    put = put
+    get = get
 
 type PasswordHash = (HashParameters, ByteString)
+
+newtype SerializableOptions = SerializableOptions Crypto.Options
+instance SC.SafeCopy SerializableOptions where
+    version = 0
+    kind = SC.base
+    putCopy = SC.putCopy
+    getCopy = SC.getCopy
+
+
+instance SC.SafeCopy HashParameters where
+    version = 0
+    kind = SC.base
+    putCopy = SC.putCopy
+    getCopy = SC.getCopy
 
 -- | Default Options:
 -- TimeCost: Default is 3.
@@ -51,25 +81,26 @@ type PasswordHash = (HashParameters, ByteString)
 -- suggests much grater number.
 -- Parallelism: Default 1. But I would suggest to use grater number, probably
 -- as the number of CPU cores.
-defaultOptions :: Options
-defaultOptions = Options
-    { iterations = 3
-    , memory = 1 `shiftL` 12
-    , parallelism = 1
-    , variant = Argon2id
-    , version = Version13
+defaultOptions :: Crypto.Options
+defaultOptions = Crypto.Options
+    { Crypto.iterations = 3
+    , Crypto.memory = 1 `shiftL` 12
+    , Crypto.parallelism = 1
+    , Crypto.variant = Crypto.Argon2id
+    , Crypto.version = Crypto.Version13
     }
 
 hashPassword
     :: ByteString
     -- ^ password
-    -> Options
+    -> Crypto.Options
     -> Int
     -- ^ Output hash size. Default is 32.
     -> IO (CryptoFailable PasswordHash)
 hashPassword password options hashSize = do
     salt <- getRandomBytes 16
-    pure $ (HashParameters options hashSize salt, ) <$> hash options password salt hashSize
+    pure $ (HashParameters options hashSize salt, )
+        <$> Crypto.hash options password salt hashSize
 
 verifyPassword
     :: ByteString
@@ -77,4 +108,4 @@ verifyPassword
     -> PasswordHash
     -> CryptoFailable Bool
 verifyPassword password (HashParameters options hashSize salt, passwordHash) = do
-    (passwordHash ==) <$> hash options password salt hashSize
+    (passwordHash ==) <$> Crypto.hash options password salt hashSize

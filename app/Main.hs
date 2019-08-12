@@ -26,7 +26,7 @@ import Servant.Server (Handler, serve, hoistServer)
 import System.IO (IO, print)
 
 import Control.Monad.Freer.Service (ServiceChannel)
-import DataModel.Type.DataModel (defaultDataModel)
+import DataModel.Type.DataModel (createDefaultDataModel)
 import DataModel.Service
     ( DataModel
     , createDataModelChannel
@@ -37,12 +37,13 @@ import Network.URI.Static (staticURI)
 import Scraper.Parser.Gogoanime (getEntrisFromFronPage, gogoanimeUrl)
 import Scraper.Service (runScraper)
 
+
 baseUrl :: URI
 baseUrl = $$(staticURI "https://gogoanime.io/")
 
 main :: IO ()
 main = do
-    dataModel <- openLocalState defaultDataModel
+    dataModel <- createDefaultDataModel >>= openLocalState
     databaseChan <- createDataModelChannel
     forkIO $ runDataModel dataModel databaseChan
 

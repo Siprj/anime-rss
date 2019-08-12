@@ -29,6 +29,7 @@ dependencies:
   - acid-state
   - attoparsec
   - bytestring
+  - cereal
   - containers
   - data-default
   - feed
