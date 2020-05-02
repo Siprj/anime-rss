@@ -32,7 +32,6 @@ import DataModel.Service
     , runDataModelEffect
     )
 import Network.URI.Static (staticURI)
-import Scraper.Parser.Gogoanime (getEntrisFromFronPage, gogoanimeUrl)
 import Scraper.Service (runScraper)
 
 
@@ -44,7 +43,6 @@ main = do
     databaseChan <- createDataModelChannel
     forkIO $ runDataModel databaseChan
 
-    getEntrisFromFronPage gogoanimeUrl >>= print
     forkIO $ runScraper' databaseChan
     run 8081 (restApp databaseChan)
   where
@@ -65,6 +63,8 @@ main = do
         $ runReader eff (Context baseUrl "pokus")
 
     runScraper' databaseChan =
+        -- Time is is in milliseconds!!!
+        -- This is approximately 15 minutes.
         runM . runDataModelEffect databaseChan $ runScraper 1000000000
 
 intLiftIO :: Eff '[IO, Handler] r -> Eff '[Handler] r

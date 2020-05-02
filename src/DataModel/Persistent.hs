@@ -16,6 +16,10 @@ module DataModel.Persistent
     , UserId
     , User(..)
     , EntityField(..)
+    , AnimeId
+    , Anime(..)
+    , UsersAnime(..)
+    , UsersAnimeId
     , migrateAll
     )
   where
@@ -55,5 +59,13 @@ User
 
     UniqueUsername email
     deriving Show
+
+Anime
+    name Text
+    imgUrl URI
+
+UsersAnime
+    userId UserId
+    animId AnimeId
 |]
 

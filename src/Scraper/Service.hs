@@ -23,7 +23,7 @@ import Control.Concurrent (threadDelay)
 import Data.Function (($), (.))
 import Data.Int (Int)
 import Data.Time.Clock (getCurrentTime)
-import System.IO (IO)
+import System.IO (IO, putStrLn)
 
 import DataModel.Persistent
     ( Feed
@@ -43,6 +43,8 @@ import Scraper.Parser.Type
 
 runScraper :: Int -> Eff [DataModel, IO] ()
 runScraper time = do
+    -- TODO Use logging instead of this print.
+    send $ putStrLn "running scraper"
     entries <- send $ getEntrisFromFronPage gogoanimeUrl
     currentTime <- send $ getCurrentTime
     mapM_ (addFeedIfUnique . toSetFeed currentTime) entries
