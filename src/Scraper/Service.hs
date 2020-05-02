@@ -22,16 +22,17 @@ import Control.Monad.Freer (Eff, send)
 import Control.Concurrent (threadDelay)
 import Data.Function (($), (.))
 import Data.Int (Int)
+import Data.Time.Clock (getCurrentTime)
 import System.IO (IO)
 
-import DataModel.Type.Feed
-    ( Feed'
-        ( Feed'
-        , _name
-        , _url
-        , _imgUrl
-        , _episodeNumber
-        , _date
+import DataModel.Persistent
+    ( Feed
+        ( Feed
+        , feedName
+        , feedUrl
+        , feedImgUrl
+        , feedEpisodeNumber
+        , feedDate
         )
     )
 import DataModel.Service (DataModel, addFeedIfUnique)
@@ -43,14 +44,15 @@ import Scraper.Parser.Type
 runScraper :: Int -> Eff [DataModel, IO] ()
 runScraper time = do
     entries <- send $ getEntrisFromFronPage gogoanimeUrl
-    mapM_ (addFeedIfUnique . toSetFeed) entries
+    currentTime <- send $ getCurrentTime
+    mapM_ (addFeedIfUnique . toSetFeed currentTime) entries
     send $ threadDelay time
     runScraper time
   where
-    toSetFeed AnimeEntry{..} = Feed'
-        { _name = title
-        , _url = url
-        , _imgUrl = imageUrl
-        , _episodeNumber = episodeNumber
-        , _date = ()
+    toSetFeed currentTime AnimeEntry{..} = Feed
+        { feedName = title
+        , feedUrl = url
+        , feedImgUrl = imageUrl
+        , feedEpisodeNumber = episodeNumber
+        , feedDate = currentTime
         }

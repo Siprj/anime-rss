@@ -21,8 +21,9 @@ import Control.Applicative ((<$>))
 import Control.Concurrent.MVar (MVar, newEmptyMVar, takeMVar, putMVar)
 import Control.Concurrent.STM.TChan (TChan, newTChanIO, writeTChan, readTChan)
 import Control.Monad.Freer (Eff, Member, runNat)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.STM (atomically)
-import Data.Function (($))
+import Data.Function (($), (.))
 import System.IO (IO)
 
 
@@ -48,14 +49,14 @@ createServiceChannel :: IscCall service => IO (ServiceChannel service)
 createServiceChannel = ServiceChannel <$> newTChanIO
 
 runServiceChannel
-    :: IscCall service
+    :: (IscCall service, MonadIO m)
     => ServiceChannel service
-    -> (forall a. (a -> IO ()) -> service a -> IO ())
-    -> IO ()
+    -> (forall a. (a -> m ()) -> service a -> m ())
+    -> m ()
 runServiceChannel schan@(ServiceChannel chan) f = do
-    val <- atomically $ readTChan chan
+    val <- liftIO $ atomically $ readTChan chan
     case val of
-        ChannelContainer v resMVar -> f (putMVar resMVar) $ get v
+        ChannelContainer v resMVar -> f (liftIO . putMVar resMVar) $ get v
     runServiceChannel schan f
 
 runServiceEffect

@@ -6,6 +6,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -22,14 +23,24 @@ module DataModel.Service
     )
   where
 
-import Control.Monad ((>>=), (>>))
+import Control.Monad ((>>=), void)
 import Control.Monad.Freer (Eff, Member, send)
-import Data.Acid (AcidState)
+import Control.Monad.Trans.Reader (ReaderT)
+import Control.Monad.Logger (NoLoggingT)
+import Conduit (ResourceT)
 import Data.Function (($), (.))
-import Data.Maybe (Maybe)
+import Data.Functor ((<$>), fmap)
+import Data.Maybe (Maybe, listToMaybe)
 import Data.Time (UTCTime)
-import Data.Vector (Vector)
 import System.IO (IO)
+import Database.Persist
+    ( SelectOpt(Desc, LimitTo)
+    , Entity(entityVal)
+    , insertUniqueEntity
+    , selectList
+    )
+import Database.Persist.Sql (SqlBackend, runMigration)
+import Database.Persist.Sqlite (runSqlite)
 
 import Control.Monad.Freer.Service
     ( IscCall(ChannelData, get, put)
@@ -38,19 +49,17 @@ import Control.Monad.Freer.Service
     , runServiceChannel
     , runServiceEffect
     )
-import qualified DataModel.Type.DataModel as DataModel (DataModel)
-import DataModel.Type.Feed (Feed, SetFeed)
-import qualified DataModel.Service.Feed as Service (addFeedIfUnique, listFeeds)
+import DataModel.Persistent (Feed(feedDate), EntityField(FeedDate), migrateAll)
 
 
 data DataModel s where
-    AddFeedIfUnique :: SetFeed -> DataModel ()
-    ListFeeds :: DataModel (Vector Feed, Maybe UTCTime)
+    AddFeedIfUnique :: Feed -> DataModel ()
+    ListFeeds :: DataModel ([Feed], Maybe UTCTime)
 
-addFeedIfUnique :: Member DataModel effs => SetFeed -> Eff effs ()
+addFeedIfUnique :: Member DataModel effs => Feed -> Eff effs ()
 addFeedIfUnique = send . AddFeedIfUnique
 
-listFeeds :: Member DataModel effs => Eff effs (Vector Feed, Maybe UTCTime)
+listFeeds :: Member DataModel effs => Eff effs ([Feed], Maybe UTCTime)
 listFeeds = send ListFeeds
 
 instance IscCall DataModel where
@@ -62,16 +71,23 @@ instance IscCall DataModel where
     put :: DataModel a -> ChannelData DataModel a
     put = WrapDataModel
 
-processDataModel :: AcidState DataModel.DataModel -> (a -> IO ()) -> DataModel a -> IO ()
-processDataModel state return' = \case
-    AddFeedIfUnique v -> Service.addFeedIfUnique state v >> return' ()
-    ListFeeds -> Service.listFeeds state >>= return'
+type DataModelMonad = ReaderT SqlBackend (NoLoggingT (ResourceT IO))
+
+processDataModel :: (a -> DataModelMonad ()) -> DataModel a -> DataModelMonad ()
+processDataModel return' = \case
+    AddFeedIfUnique v -> (void $ insertUniqueEntity v) >>= return'
+    ListFeeds -> do
+        feeds <- (fmap entityVal) <$> selectList [] [Desc FeedDate, LimitTo 50]
+        return' (feeds, feedDate <$> listToMaybe feeds)
 
 createDataModelChannel :: IO (ServiceChannel DataModel)
 createDataModelChannel = createServiceChannel
 
-runDataModel :: AcidState DataModel.DataModel -> ServiceChannel DataModel -> IO ()
-runDataModel model chan = runServiceChannel chan $ processDataModel model
+-- TODO: Get the connection string as argument.
+runDataModel :: ServiceChannel DataModel -> IO ()
+runDataModel chan = runSqlite ":memory:" $ do
+    runMigration migrateAll
+    runServiceChannel chan $ processDataModel
 
 runDataModelEffect
     :: Member IO effs => ServiceChannel DataModel

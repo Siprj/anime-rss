@@ -26,11 +26,12 @@ flags:
 
 dependencies:
   - base >= 4.7 && < 5
-  - acid-state
   - attoparsec
   - bytestring
   - cereal
+  - conduit
   - containers
+  - cryptonite
   - data-default
   - feed
   - freer-effects
@@ -42,9 +43,13 @@ dependencies:
   - hxt-css
   - lens
   - megaparsec
+  - monad-logger
   - mtl
   - network-uri
   - parser-combinators
+  - persistent
+  - persistent-sqlite
+  - persistent-template
   - pretty-simple
   - safecopy
   - servant
@@ -52,14 +57,13 @@ dependencies:
   - split
   - stm
   - template-haskell
-  - transformers
   - text
   - time
+  - transformers
   - vector
   - wreq
   - xml
   - xml-conduit
-  - cryptonite
 
 library:
   source-dirs: src

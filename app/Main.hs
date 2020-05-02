@@ -15,7 +15,6 @@ import Control.Monad.Freer.Internal (Eff(E, Val))
 import Control.Monad.Freer.Reader (runReader)
 import Control.Monad.Freer (runM, send, runNat)
 import Control.Monad.IO.Class (liftIO)
-import Data.Acid (openLocalState)
 import Data.Function (($), (.))
 import Data.Proxy (Proxy(Proxy))
 import Network.URI (URI)
@@ -26,7 +25,6 @@ import Servant.Server (Handler, serve, hoistServer)
 import System.IO (IO, print)
 
 import Control.Monad.Freer.Service (ServiceChannel)
-import DataModel.Type.DataModel (createDefaultDataModel)
 import DataModel.Service
     ( DataModel
     , createDataModelChannel
@@ -43,9 +41,8 @@ baseUrl = $$(staticURI "https://gogoanime.io/")
 
 main :: IO ()
 main = do
-    dataModel <- createDefaultDataModel >>= openLocalState
     databaseChan <- createDataModelChannel
-    forkIO $ runDataModel dataModel databaseChan
+    forkIO $ runDataModel databaseChan
 
     getEntrisFromFronPage gogoanimeUrl >>= print
     forkIO $ runScraper' databaseChan

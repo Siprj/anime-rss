@@ -37,7 +37,6 @@ import Data.Time
     , rfc822DateFormat
     )
 import Data.Typeable (Typeable)
-import Data.Vector (toList)
 import Network.HTTP.Media ((//))
 import Network.URI (URI)
 import Servant.API ((:>), Get)
@@ -70,8 +69,8 @@ import Text.XML
     )
 import System.IO (IO)
 
-import qualified DataModel.Type.Feed as DataModel
-    (Feed, Feed'(Feed', _name, _url, _date, _imgUrl, _episodeNumber))
+import qualified DataModel.Persistent as DataModel
+    (Feed(Feed, feedName, feedUrl, feedDate, feedImgUrl, feedEpisodeNumber))
 import DataModel.Service (DataModel, listFeeds)
 
 
@@ -130,7 +129,7 @@ rssApiHandler = do
     context@Context{..} <- ask
 
     pure . feedFromAtom . fd context lastModification
-        . toList $ fmap toEntry feeds
+        $ fmap toEntry feeds
 
   where
     fd :: Context -> Maybe UTCTime -> [Entry] -> Atom.Feed
@@ -143,18 +142,18 @@ rssApiHandler = do
             $ maybe "" (formatTime defaultTimeLocale rfc822DateFormat) date
 
     toEntry :: DataModel.Feed -> Entry
-    toEntry DataModel.Feed'{..} = toEntry'
-        { entryLinks = [nullLink $ showT _url]
+    toEntry DataModel.Feed{..} = toEntry'
+        { entryLinks = [nullLink $ showT feedUrl]
         , entrySummary = Just . HTMLString
         -- TODO: Use some HTML template language
-            $ "<div><a href=\"" <> showT _url <> ">\"<img src=\""
-            <> showT _imgUrl <> "\"></div>"
+            $ "<div><a href=\"" <> showT feedUrl <> ">\"<img src=\""
+            <> showT feedImgUrl <> "\"></div>"
         }
       where
         toEntry' :: Entry
-        toEntry' = nullEntry (showT _url)
-            (TextString $ _name <> " [Episode: " <> showT _episodeNumber <> "]")
-            .  pack $ formatTime defaultTimeLocale rfc822DateFormat _date
+        toEntry' = nullEntry (showT feedUrl)
+            (TextString $ feedName <> " [Episode: " <> showT feedEpisodeNumber <> "]")
+            .  pack $ formatTime defaultTimeLocale rfc822DateFormat feedDate
 
 showT :: Show a => a -> Text
 showT = pack . show

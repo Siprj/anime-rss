@@ -38,10 +38,6 @@ import Data.Function (($))
 import Data.Functor ((<$>))
 import Data.Int (Int)
 import Data.Serialize (Serialize(put, get))
-import qualified Data.SafeCopy as SC
-    ( SafeCopy(putCopy, getCopy, kind, version)
-    , base
-    )
 import System.IO (IO)
 import Text.Show (Show)
 
@@ -58,20 +54,6 @@ instance Serialize HashParameters where
     get = get
 
 type PasswordHash = (HashParameters, ByteString)
-
-newtype SerializableOptions = SerializableOptions Crypto.Options
-instance SC.SafeCopy SerializableOptions where
-    version = 0
-    kind = SC.base
-    putCopy = SC.putCopy
-    getCopy = SC.getCopy
-
-
-instance SC.SafeCopy HashParameters where
-    version = 0
-    kind = SC.base
-    putCopy = SC.putCopy
-    getCopy = SC.getCopy
 
 -- | Default Options:
 -- TimeCost: Default is 3.
