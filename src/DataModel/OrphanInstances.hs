@@ -24,8 +24,10 @@ import Data.Maybe (maybe)
 import Data.Semigroup ((<>))
 import Data.Serialize (encode, decode)
 import Data.Text (pack, unpack)
+import Data.UUID (UUID)
 import Network.URI (URI, parseURI)
 import Text.Show (show)
+import Text.Read (readMaybe)
 
 instance PersistFieldSql URI where
     sqlType _ = SqlString
@@ -43,6 +45,10 @@ instance PersistField HashParameters where
     fromPersistValue (PersistByteString bs) = left (\e -> "Deserialization of HashParameters failed with error: " <> pack e) $ decode bs
     fromPersistValue x = Left $ "When trying to deserialize an HashParameters: expected PersistByteString, received: " <> pack (show x)
 
---    toPersistValue = PersistText . pack . show
---    fromPersistValue (PersistText v) = maybe (Left "PasswordHash is corrupted") Right . parsePasswordHash $ unpack v
---    fromPersistValue x = Left $ "When trying to deserialize an PasswordHash: expected PersistText, received: " <> pack (show x)
+instance PersistFieldSql UUID where
+    sqlType _ = SqlString
+
+instance PersistField UUID where
+    toPersistValue = PersistText . pack . show
+    fromPersistValue (PersistText t) = maybe (Left $ "Deserialization of UUID failed! Original value: " <> t) Right . readMaybe $ unpack t
+    fromPersistValue x = Left $ "When trying to deserialize an HashParameters: expected PersistText, received: " <> pack (show x)

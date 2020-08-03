@@ -20,41 +20,21 @@ module Scraper.Service
 import Control.Monad (mapM_)
 import Control.Monad.Freer (Eff, send)
 import Control.Concurrent (threadDelay)
-import Data.Function (($), (.))
+import Data.Function (($))
 import Data.Int (Int)
-import Data.Time.Clock (getCurrentTime)
 import System.IO (IO, putStrLn)
 
-import DataModel.Persistent
-    ( Feed
-        ( Feed
-        , feedName
-        , feedUrl
-        , feedImgUrl
-        , feedEpisodeNumber
-        , feedDate
-        )
-    )
-import DataModel.Service (DataModel, addFeedIfUnique)
+import DataModel.Service (DataModel, addEpisodeEntryifUnique)
 import Scraper.Parser.Gogoanime (getEntrisFromFronPage, gogoanimeUrl)
-import Scraper.Parser.Type
-    (AnimeEntry(AnimeEntry, title, url, imageUrl, episodeNumber))
 
 
 runScraper :: Int -> Eff [DataModel, IO] ()
 runScraper time = do
     -- TODO Use logging instead of this print.
     send $ putStrLn "running scraper"
+    -- TODO: Collect errors into EGK.
     entries <- send $ getEntrisFromFronPage gogoanimeUrl
-    currentTime <- send $ getCurrentTime
-    mapM_ (addFeedIfUnique . toSetFeed currentTime) entries
+    -- TODO: Test how long it took to insert data into database and log it.
+    mapM_ addEpisodeEntryifUnique entries
     send $ threadDelay time
     runScraper time
-  where
-    toSetFeed currentTime AnimeEntry{..} = Feed
-        { feedName = title
-        , feedUrl = url
-        , feedImgUrl = imageUrl
-        , feedEpisodeNumber = episodeNumber
-        , feedDate = currentTime
-        }

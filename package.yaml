@@ -41,11 +41,11 @@ dependencies:
   - http-media
   - hxt
   - hxt-css
-  - lens
   - megaparsec
   - monad-logger
   - mtl
   - network-uri
+  - optics
   - parser-combinators
   - persistent
   - persistent-sqlite
@@ -60,6 +60,7 @@ dependencies:
   - text
   - time
   - transformers
+  - uuid
   - vector
   - wreq
   - xml

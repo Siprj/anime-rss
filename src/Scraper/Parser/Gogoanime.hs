@@ -3,6 +3,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedLabels #-}
 
 module Scraper.Parser.Gogoanime
     ( getEntrisFromFronPage
@@ -13,7 +14,7 @@ module Scraper.Parser.Gogoanime
 import Control.Applicative ((<|>), pure)
 import Control.Arrow.ArrowList (isA)
 import Control.Arrow ((>>>), (|||), ArrowChoice, arr, returnA, zeroArrow)
-import Control.Lens (view)
+import Optics (lensVL, view)
 import Control.Monad ((>>=), void)
 import Data.Attoparsec.ByteString.Char8
     ( Parser
@@ -30,6 +31,7 @@ import Data.Either (Either)
 import Data.Function (($), (.), id)
 import Data.Int (Int)
 import Data.Maybe (fromJust, isJust)
+import Data.Semigroup ((<>))
 import Data.String (String)
 import Data.Text (pack)
 import Network.URI (URI, parseRelativeReference, relativeTo, parseURI)
@@ -48,20 +50,22 @@ import Text.XML.HXT.Core
     )
 
 import Network.URI.Static (staticURI)
-import Scraper.Parser.Type
-    (AnimeEntry(AnimeEntry, imageUrl, title, url, episodeNumber))
+import Core.Type.EpisodeEntry
+    (animeUrl, EpisodeEntry(EpisodeEntry, imageUrl, title, url, episodeNumber))
 
 
 gogoanimeUrl :: URI
 gogoanimeUrl = $$(staticURI "https://gogoanime.io/")
 
-getEntrisFromFronPage :: URI -> IO [AnimeEntry]
+-- TODO: Save how many episodes was parsed and try use this information to
+-- determine that parser failed.
+getEntrisFromFronPage :: URI -> IO [EpisodeEntry]
 getEntrisFromFronPage url = do
-    data' <- get (show url) >>= (pure . unpack . view responseBody)
+    data' <- get (show url) >>= (pure . unpack . view (lensVL responseBody))
     runX $ (parseHtml data') >>> css ".items" >>> css ".img"
         >>> deep (hasName "a" >>> parseEntry)
   where
-    parseEntry :: (ArrowXml a, ArrowChoice a) => a XmlTree AnimeEntry
+    parseEntry :: (ArrowXml a, ArrowChoice a) => a XmlTree EpisodeEntry
     parseEntry = proc x -> do
         linkStr <- getAttrValue "href" -< x
         link <- arr parseRelativeReference >>> isA isJust >>> arr fromJust -< linkStr
@@ -69,11 +73,14 @@ getEntrisFromFronPage url = do
         title <- getAttrValue "title" >>> arr pack -< x
         imageUrl <- getChildren >>> hasName "img" >>> getAttrValue "src"
             >>> arr parseURI >>> isA isJust >>> arr fromJust -< x
-        returnA -< AnimeEntry
+        animeUrl <- arr parseRelativeReference >>> isA isJust
+            >>> arr fromJust -< ("category/" <> linkStr)
+        returnA -< EpisodeEntry
             { url = link `relativeTo` url
             , title
             , imageUrl
             , episodeNumber
+            , animeUrl
             }
 
 episodeNumberParser :: String -> Either String Int

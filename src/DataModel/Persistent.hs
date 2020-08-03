@@ -11,8 +11,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module DataModel.Persistent
-    ( FeedId
-    , Feed(..)
+    ( EpisodeId
+    , Episode(..)
     , UserId
     , User(..)
     , EntityField(..)
@@ -20,11 +20,16 @@ module DataModel.Persistent
     , Anime(..)
     , UsersAnime(..)
     , UsersAnimeId
+    , TemporaryKeyId
+    , TemporaryKey(..)
+    , AnimeFollowedByUserId
+    , AnimeFollowedByUser(..)
     , migrateAll
     )
   where
 
 import Crypto.PasswordStore (PasswordHash)
+import Data.Bool (Bool)
 import Data.Int (Int)
 import Database.Persist.TH
     ( mkMigrate
@@ -39,33 +44,63 @@ import Data.Time.Clock (UTCTime)
 import Text.Show (Show)
 import Network.URI (URI)
 import DataModel.OrphanInstances ()
+import Data.UUID (UUID)
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
-Feed
-    name Text
+Episode
     url URI
-    imgUrl URI
-    episodeNumber Int
+    number Int
     date UTCTime
+    animeTitle Text
+    imgUrl URI
 
-    UniqueUserName url
+    UniqueUrl url
+    UniqueTitleAndNumber animeTitle number
+
     deriving Show
 
 User
     name Text
     email Text
     password PasswordHash
+    newAnimeChannel UUID
+    newEpisodeChannel UUID
 
-    UniqueUsername email
+    UniqueUserEmail email
+
+    deriving Show
+
+TemporaryKey
+    key UUID
+    until UTCTime
+    userEmail Text
+
+    deriving Show
+
+AnimeFollowedByUser
+    userEmail Text
+    animeTitle Text
+    follows Bool
+
     deriving Show
 
 Anime
-    name Text
+    title Text
     imgUrl URI
+    animeUrl URI
+    date UTCTime
+
+    UniqueAnimeTitle title
+    UniqueAnimeUrl animeUrl
+
+    deriving Show
 
 UsersAnime
-    userId UserId
-    animId AnimeId
+    userEmail Text
+    animeTitle Text
+
+    deriving Show
+
 |]
 
