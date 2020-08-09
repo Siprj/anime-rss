@@ -4,6 +4,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -22,9 +23,9 @@ module Crypto.PasswordStore
 import GHC.Generics(Generic)
 import Control.Applicative (pure)
 import qualified Crypto.KDF.Argon2 as Crypto
-    ( Options(Options, version, variant, memory, parallelism, iterations)
-    , Variant(Argon2id)
-    , Version(Version13)
+    (Options(Options, version, variant, memory, parallelism, iterations)
+    , Variant(Argon2id, Argon2d, Argon2i)
+    , Version(Version13, Version10)
     , hash
     )
 import Crypto.Error (CryptoFailable)
@@ -37,9 +38,13 @@ import Data.Eq (Eq)
 import Data.Function (($))
 import Data.Functor ((<$>))
 import Data.Int (Int)
-import Data.Serialize (Serialize(put, get))
+import Data.Serialize (getWord8, putWord8, Serialize(put, get), Put, Get)
 import System.IO (IO)
 import Text.Show (Show)
+import Data.Serialize.Put ()
+import Prelude (error)
+import Text.Show (Show(show))
+import Data.Semigroup (Semigroup((<>)))
 
 
 data HashParameters = HashParameters
@@ -49,9 +54,52 @@ data HashParameters = HashParameters
     }
   deriving (Eq, Show, Generic)
 
+putVariant :: Crypto.Variant -> Put
+putVariant v = putWord8 $ case v of
+    Crypto.Argon2d -> 0
+    Crypto.Argon2i -> 1
+    Crypto.Argon2id -> 2
+
+getVariant :: Get Crypto.Variant
+getVariant = mkVariant <$> getWord8
+  where
+    mkVariant = \case
+        0 -> Crypto.Argon2d
+        1 -> Crypto.Argon2i
+        2 -> Crypto.Argon2id
+        v -> error $ "Can't parse Argon2 variant. Expected <0-2> got: " <> show v
+
+putVersion :: Crypto.Version -> Put
+putVersion v = putWord8 $ case v of
+    Crypto.Version10 -> 0
+    Crypto.Version13 -> 1
+
+getVersion :: Get Crypto.Version
+getVersion = mkVariant <$> getWord8
+  where
+    mkVariant = \case
+        0 -> Crypto.Version10
+        1 -> Crypto.Version13
+        v -> error $ "Can't parse Argon2 version. Expected <0-1> got: " <> show v
+
 instance Serialize HashParameters where
-    put = put
-    get = get
+     put (HashParameters Crypto.Options{..} hashSize salt) = do
+        put iterations
+        put memory
+        put parallelism
+        putVariant variant
+        putVersion version
+        put hashSize
+        put salt
+     get = do
+        iterations <- get
+        memory <- get
+        parallelism <- get
+        variant <- getVariant
+        version <- getVersion
+        hashSize <- get
+        salt <- get
+        pure $ HashParameters Crypto.Options{..} hashSize salt
 
 type PasswordHash = (HashParameters, ByteString)
 

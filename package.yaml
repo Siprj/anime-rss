@@ -86,6 +86,9 @@ executables:
       - -with-rtsopts=-N
       - -Wimplicit-prelude
       - -Wmissing-import-lists
+    when:
+      - condition: flag(pedantic)
+        ghc-options: -Werror
     dependencies:
       - anime-rss
       - tasty
@@ -93,6 +96,24 @@ executables:
       - wreq
       - warp
       - wai
+
+executables:
+  admin-tui:
+    main: Main.hs
+    source-dirs: admin-tui
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -Wimplicit-prelude
+      - -Wmissing-import-lists
+    when:
+      - condition: flag(pedantic)
+        ghc-options: -Werror
+    dependencies:
+      - anime-rss
+      - vty
+      - brick
 
 tests:
   hlint-test-exe:
