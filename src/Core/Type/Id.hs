@@ -14,6 +14,7 @@ module Core.Type.Id
 
 import Data.Int (Int64)
 import Text.Show (Show)
+import Data.Eq (Eq)
 
 
 data IdKind
@@ -22,7 +23,7 @@ data IdKind
     | User
 
 newtype Id (a :: IdKind) = Id Int64
-  deriving (Show)
+  deriving (Show, Eq)
 
 type AnimeId = Id 'Anime
 type EpisodeId = Id 'Episode
