@@ -1,0 +1,12 @@
+cradle:
+  cabal:
+    - path: "src"
+      component: "lib:anime-rss"
+    - path: "app/Main.hs"
+      component: "anime-rss:exe:anime-rss"
+    - path: "admin-tui/Main.hs"
+      component: "anime-rss:exe:admin-tui"
+    - path: "test"
+      component: "anime-rss:test:anime-rss-test"
+    - path: "test"
+      component: "anime-rss:test:hlint-test-exe"
