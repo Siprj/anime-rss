@@ -8,7 +8,7 @@
 {-# LANGUAGE TypeOperators #-}
 
 module Rest.Types
-    ( User(..)
+    ( UserBrief(..)
     , ChannelId
     )
   where
@@ -18,7 +18,7 @@ import Data.UUID (UUID)
 
 type ChannelId = UUID
 
-data User = User
+data UserBrief = UserBrief
     { name :: Text
     , email :: Text
     }

@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DuplicateRecordFields #-}
@@ -16,13 +17,19 @@
 
 module Rest.Api
     ( Api
+    , Protected
+    , Anime(..)
     , Login(..)
+    , PostAnimeFollow(..)
     , User(..)
+    , ChannelId
     )
   where
 
 import Core.Type.Id (UserId, AnimeId)
 import Core.Type.User (Email)
+import Web.Cookie (SetCookie)
+import Data.Bool (Bool)
 import Data.Eq (Eq)
 import Data.Text (Text)
 import Data.Time (UTCTime)
@@ -31,11 +38,11 @@ import GHC.Generics (Generic)
 import Network.URI (URI)
 import Optics (makeFieldLabelsWith, noPrefixFieldLabels)
 import Rest.AtomMime (AtomFeed)
-import Servant.API (ReqBody, PostNoContent, (:<|>), (:>), Get, JSON)
-import Servant.Auth.Server (Auth, JWT)
+import Rest.Authentication (UserAuthentication)
+import Servant.API (Header, Headers, Capture, ReqBody, (:<|>), (:>), Get, JSON, Post)
 import Text.Feed.Types (Feed)
 import Text.Show (Show)
-import Data.Bool (Bool)
+import Servant (NoContent)
 
 
 type ChannelId = UUID
@@ -44,7 +51,6 @@ data User = User
     { userId ::UserId
     , email :: Email
     , name :: Text
-    , animeChannel :: UUID
     , episodeChannel :: UUID
     }
   deriving (Show, Eq, Generic)
@@ -58,19 +64,13 @@ data Login = Login
 
 makeFieldLabelsWith noPrefixFieldLabels ''Login
 
-data UserSession = UserSession
-    { userId :: UserId
-    }
-  deriving (Show, Eq, Generic)
-
-makeFieldLabelsWith noPrefixFieldLabels ''UserSession
-
 data Anime = Anime
     { animeId :: AnimeId
     , title :: Text
     , url :: URI
     , imageUrl :: URI
     , date :: UTCTime
+    , following :: Bool
     }
   deriving (Show, Eq, Generic)
 
@@ -86,12 +86,12 @@ makeFieldLabelsWith noPrefixFieldLabels ''PostAnimeFollow
 
 type Protected
     = "user" :> Get '[JSON] User
-    :<|> "anime" :> ReqBody '[JSON] [PostAnimeFollow] :> PostNoContent
+    :<|> "anime" :> ReqBody '[JSON] [PostAnimeFollow] :> Post '[JSON] [Anime]
+    :<|> "anime" :> Get '[JSON] [Anime]
 
 type Api
     = "atom" :> Get '[AtomFeed] Feed
-    :<|> "atom" :> "episodes" :> ChannelId :> Get '[AtomFeed] Feed
-    :<|> "atom" :> "anime" :> ChannelId :> Get '[AtomFeed] Feed
-    :<|> "login" :> ReqBody '[JSON] Login :> PostNoContent
-    :<|> "anime" :> Get '[JSON] [Anime]
-    :<|> Servant.Auth.Server.Auth '[JWT] UserSession :> Protected
+    :<|> "atom" :> "episodes" :> Capture "channel-id" ChannelId :> Get '[AtomFeed] Feed
+    :<|> "atom" :> "anime" :> Capture "channel-id" ChannelId :> Get '[AtomFeed] Feed
+    :<|> "login" :> ReqBody '[JSON] Login :> Post '[JSON] (Headers '[Header "Set-Cookie" SetCookie] NoContent)
+    :<|> UserAuthentication :> Protected

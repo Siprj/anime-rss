@@ -41,11 +41,12 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Reader (ReaderT)
 import Control.Monad ((>>), (>>=), void)
+import Control.Monad.Extra (whenJust)
 import Database.Persist
-    ( SelectOpt(Desc, LimitTo)
-    , Entity(Entity, entityVal)
+    ( Entity(Entity, entityVal)
     , (==.)
     , insertUniqueEntity
+    , upsertBy
     , selectList
     , selectFirst
     , delete
@@ -65,7 +66,7 @@ import qualified Core.Type.Episode as Core
     (Episode (Episode, date, episodeId, title, imageUrl, date, url, number))
 import qualified Core.Type.User as Core
     ( NewUser(NewUser, name, email, password)
-    , User(User, userId, name, email, password, newAnimeChannel, newEpisodeChannel), Email
+    , User(User, userId, name, email, password, episodeChannel), Email
     )
 import Control.Monad.Freer.Service
     ( IscCall(ChannelData, get, put)
@@ -75,13 +76,16 @@ import Control.Monad.Freer.Service
     , runServiceEffect
     )
 import DataModel.Persistent
-    (  episodeImgUrl, animeDate
-    , Episode(Episode, episodeUrl, episodeNumber, episodeDate, episodeAnimeTitle)
+    (  animeDate
+    , Episode(Episode, episodeUrl, episodeNumber, episodeDate, episodeAnimeId)
     , Anime(Anime, animeTitle, animeImgUrl, animeAnimeUrl)
-    , User(User, userName, userEmail, userNewAnimeChannel, userPassword, userNewEpisodeChannel)
-    , EntityField(EpisodeDate, UserEmail, UserId)
+    , User(User, userName, userEmail, userPassword, userNewEpisodeChannel)
+    , EntityField(EpisodeDate, EpisodeAnimeId, UserEmail, UserId, AnimeId)
+    , UniqueAnimeTitle
     , migrateAll
     )
+import Database.Esqueleto ((^.), select, from, orderBy, desc, where_)
+import qualified Database.Esqueleto as Esql ((==.))
 
 import Crypto.PasswordStore (PasswordHash)
 
@@ -138,7 +142,7 @@ processDataModel return' action = f action >> transactionSave
             return' $ fmap toCoreUser user'
         AddEpisodeEntryIfUnique animeEntry -> addEpisode animeEntry >>= return'
         ListAllFeeds -> do
-            feeds <- (fmap toCoreEpisode) <$> selectList [] [Desc EpisodeDate, LimitTo 50]
+            feeds <- (fmap toCoreEpisode) <$> selectLastEpisodes
             return' (feeds, Core.date <$> listToMaybe feeds)
         ListUsers -> (fmap toCoreUser) <$> selectList [] [] >>= return'
         DeleteUser userId -> do
@@ -151,11 +155,18 @@ processDataModel return' action = f action >> transactionSave
             user <- selectFirst [UserId ==. (toSqlKey @User $ fromId userId)] []
             return' $ fmap toCoreUser user
 
-toCoreEpisode :: Entity Episode -> Core.Episode
-toCoreEpisode (Entity key Episode{..}) = Core.Episode
+selectLastEpisodes :: DataModelMonad [(Entity Episode, Entity Anime)]
+selectLastEpisodes = do
+    select $ from $ \(anime, episode) -> do
+        where_ (anime ^. AnimeId Esql.==. episode ^. EpisodeAnimeId)
+        orderBy [desc $ episode ^. EpisodeDate]
+        pure (episode, anime)
+
+toCoreEpisode :: (Entity Episode, Entity Anime) -> Core.Episode
+toCoreEpisode (Entity key Episode{..}, Entity _ Anime{..}) = Core.Episode
     { episodeId = unsafeId $ fromSqlKey key
-    , title = episodeAnimeTitle
-    , imageUrl = episodeImgUrl
+    , title = animeTitle
+    , imageUrl = animeImgUrl
     , date = episodeDate
     , url = episodeUrl
     , number = episodeNumber
@@ -167,35 +178,32 @@ toCoreUser (Entity key User{..}) = Core.User
     , name = userName
     , email = userEmail
     , password = userPassword
-    , newAnimeChannel = userNewAnimeChannel
-    , newEpisodeChannel = userNewEpisodeChannel
+    , episodeChannel = userNewEpisodeChannel
     }
 
 createDbUser :: MonadIO m => Core.NewUser -> m User
 createDbUser Core.NewUser{..} = do
-    animeChannel <- liftIO nextRandom
     episodeChannel <- liftIO nextRandom
     pure $ User
         { userName = name
         , userEmail = email
         , userPassword = password
-        , userNewAnimeChannel = animeChannel
         , userNewEpisodeChannel = episodeChannel
         }
 
 addEpisode :: EpisodeEntry -> DataModelMonad ()
 addEpisode EpisodeEntry{..} = do
     currentTime <- liftIO $ getCurrentTime
-    void . insertUniqueEntity $ Anime
-        { animeTitle = title
-        , animeImgUrl = imageUrl
-        , animeAnimeUrl = animeUrl
-        , animeDate = currentTime
-        }
-    void $ insertUniqueEntity $ Episode
-        { episodeAnimeTitle = title
+    let anime = Anime
+            { animeTitle = title
+            , animeImgUrl = imageUrl
+            , animeAnimeUrl = animeUrl
+            , animeDate = currentTime
+            }
+    mAnimeId <- upsertBy (UniqueAnimeTitle title) anime []
+    whenJust mAnimeId $ \(Entity key _) -> void . insertUniqueEntity $ Episode
+        { episodeAnimeId = key
         , episodeUrl = url
-        , episodeImgUrl = imageUrl
         , episodeNumber = episodeNumber
         , episodeDate = currentTime
         }

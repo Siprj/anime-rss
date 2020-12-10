@@ -1,5 +1,7 @@
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Core.Type.Id
@@ -12,9 +14,10 @@ module Core.Type.Id
     )
   where
 
+import Data.Aeson (FromJSON, ToJSON)
+import Data.Eq (Eq)
 import Data.Int (Int64)
 import Text.Show (Show)
-import Data.Eq (Eq)
 
 
 data IdKind
@@ -24,6 +27,7 @@ data IdKind
 
 newtype Id (a :: IdKind) = Id Int64
   deriving (Show, Eq)
+  deriving newtype (FromJSON, ToJSON)
 
 type AnimeId = Id 'Anime
 type EpisodeId = Id 'Episode

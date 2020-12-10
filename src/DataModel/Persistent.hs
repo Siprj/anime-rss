@@ -5,9 +5,11 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module DataModel.Persistent
@@ -22,14 +24,12 @@ module DataModel.Persistent
     , UsersAnimeId
     , TemporaryKeyId
     , TemporaryKey(..)
-    , AnimeFollowedByUserId
-    , AnimeFollowedByUser(..)
+    , UniqueAnimeTitle
     , migrateAll
     )
   where
 
 import Crypto.PasswordStore (PasswordHash)
-import Data.Bool (Bool)
 import Data.Int (Int)
 import Database.Persist.TH
     ( mkMigrate
@@ -52,11 +52,10 @@ Episode
     url URI
     number Int
     date UTCTime
-    animeTitle Text
-    imgUrl URI
+    animeId AnimeId
 
     UniqueUrl url
-    UniqueTitleAndNumber animeTitle number
+    UniqueTitleAndNumber animeId number
 
     deriving Show
 
@@ -64,7 +63,6 @@ User
     name Text
     email Text
     password PasswordHash
-    newAnimeChannel UUID
     newEpisodeChannel UUID
 
     UniqueUserEmail email
@@ -75,13 +73,6 @@ TemporaryKey
     key UUID
     until UTCTime
     userEmail Text
-
-    deriving Show
-
-AnimeFollowedByUser
-    userEmail Text
-    animeTitle Text
-    follows Bool
 
     deriving Show
 

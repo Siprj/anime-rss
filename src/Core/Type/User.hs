@@ -31,8 +31,7 @@ data User = User
     , email :: Email
     , name :: Text
     , password :: PasswordHash
-    , newAnimeChannel :: UUID
-    , newEpisodeChannel :: UUID
+    , episodeChannel :: UUID
     }
   deriving (Show)
 
