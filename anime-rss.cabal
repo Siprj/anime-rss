@@ -1,0 +1,237 @@
+cabal-version: 1.12
+name:           anime-rss
+version:        0.1.0.0
+synopsis:       Rss feed generator for gogoanime.io
+description:    Please see the README on Github at  <https://github.com/Siprj/anime-rss#readme>
+category:       Web
+homepage:       https://github.com/Siprj/gogoanime-rss#readme
+bug-reports:    https://github.com/Siprj/gogoanime-rss/issues
+author:         Jan Sipr
+maintainer:     sipr.jan@gmail.com
+copyright:      2018 Jan Sipr
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/Siprj/gogoanime-rss
+
+flag pedantic
+  description: Pass additional warning flags and -Werror to GHC.
+  manual: True
+  default: True
+
+library
+  exposed-modules:
+      Control.Monad.Freer.Service
+      Core.Type.Anime
+      Core.Type.Episode
+      Core.Type.EpisodeEntry
+      Core.Type.Id
+      Core.Type.User
+      Crypto.PasswordStore
+      DataModel.OrphanInstances
+      DataModel.Persistent
+      DataModel.Service
+      DataModel.Type.Apply
+      Rest
+      Rest.Api
+      Rest.Authentication
+      Rest.AtomMime
+      Rest.Server
+      Rest.Types
+      Scraper.Parser.Gogoanime
+      Scraper.Service
+  other-modules:
+      Paths_anime_rss
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Wimplicit-prelude -Wmissing-import-lists -ddump-splices
+  build-depends:
+      HandsomeSoup
+    , attoparsec
+    , aeson
+    , base >=4.7 && <5
+    , bytestring
+    , cereal
+    , conduit
+    , containers
+    , cookie
+    , cryptonite
+    , data-default
+    , esqueleto
+    , extra
+    , feed
+    , freer-effects
+    , haskell-src-exts
+    , haskell-src-meta
+    , http-media
+    , hxt
+    , hxt-css
+    , megaparsec
+    , monad-logger
+    , mtl
+    , network-uri
+    , optics
+    , parser-combinators
+    , persistent
+    , persistent-sqlite
+    , persistent-template
+    , pretty-simple
+    , safecopy
+    , servant
+    , servant-auth
+    , servant-auth-server
+    , servant-server
+    , split
+    , stm
+    , template-haskell
+    , text
+    , time
+    , transformers
+    , uuid
+    , vector
+    , wreq
+    , xml
+    , xml-conduit
+  if flag(pedantic)
+    ghc-options: -Werror
+  default-language: Haskell2010
+
+executable admin-tui
+  main-is: Main.hs
+  other-modules:
+      Paths_anime_rss
+  hs-source-dirs:
+      admin-tui
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wimplicit-prelude -Wmissing-import-lists
+  build-depends:
+      HandsomeSoup
+    , anime-rss
+    , attoparsec
+    , base >=4.7 && <5
+    , brick
+    , bytestring
+    , cereal
+    , conduit
+    , containers
+    , cryptonite
+    , data-default
+    , feed
+    , freer-effects
+    , haskell-src-exts
+    , haskell-src-meta
+    , http-media
+    , http-api-data
+    , hxt
+    , hxt-css
+    , megaparsec
+    , monad-logger
+    , mtl
+    , network-uri
+    , optics
+    , parser-combinators
+    , persistent
+    , persistent-sqlite
+    , persistent-template
+    , pretty-simple
+    , safecopy
+    , servant
+    , servant-auth
+    , servant-auth-server
+    , servant-server
+    , split
+    , stm
+    , template-haskell
+    , text
+    , time
+    , transformers
+    , uuid
+    , vector
+    , vty
+    , wreq
+    , xml
+    , xml-conduit
+  if flag(pedantic)
+    ghc-options: -Werror
+  default-language: Haskell2010
+
+test-suite anime-rss-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Control.Monad.Freer.Service
+      Core.Type.Anime
+      Core.Type.Episode
+      Core.Type.EpisodeEntry
+      Core.Type.Id
+      Core.Type.User
+      Crypto.PasswordStore
+      DataModel.OrphanInstances
+      DataModel.Persistent
+      DataModel.Service
+      DataModel.Type.Apply
+      Rest
+      Rest.Api
+      Rest.AtomMime
+      Rest.Server
+      Rest.Types
+      Scraper.Parser.Gogoanime
+      Scraper.Service
+      Paths_anime_rss
+  hs-source-dirs:
+      test
+      src
+  ghc-options: -threaded -Wall -rtsopts -with-rtsopts=-N -Wimplicit-prelude -Wmissing-import-lists
+  cpp-options: -DTEST
+  build-depends:
+      HandsomeSoup
+    , anime-rss
+    , attoparsec
+    , base >=4.7 && <5
+    , bytestring
+    , cereal
+    , conduit
+    , containers
+    , cryptonite
+    , data-default
+    , feed
+    , freer-effects
+    , haskell-src-exts
+    , haskell-src-meta
+    , http-media
+    , hxt
+    , hxt-css
+    , megaparsec
+    , monad-logger
+    , mtl
+    , network-uri
+    , optics
+    , parser-combinators
+    , persistent
+    , persistent-sqlite
+    , persistent-template
+    , pretty-simple
+    , safecopy
+    , servant
+    , servant-auth
+    , servant-auth-server
+    , servant-server
+    , split
+    , stm
+    , tasty
+    , tasty-hunit
+    , template-haskell
+    , text
+    , time
+    , transformers
+    , uuid
+    , vector
+    , wreq
+    , xml
+    , xml-conduit
+  default-language: Haskell2010
