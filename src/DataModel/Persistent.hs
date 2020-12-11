@@ -24,7 +24,7 @@ module DataModel.Persistent
     , UsersAnimeId
     , TemporaryKeyId
     , TemporaryKey(..)
-    , UniqueAnimeTitle
+    , Unique(..)
     , migrateAll
     )
   where
@@ -38,7 +38,7 @@ import Database.Persist.TH
     , persistLowerCase
     , sqlSettings
     )
-import Database.Persist.Class (EntityField)
+import Database.Persist.Class (EntityField, Unique)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Text.Show (Show)
@@ -90,6 +90,7 @@ Anime
 UsersAnime
     userEmail Text
     animeTitle Text
+    follow Text
 
     deriving Show
 

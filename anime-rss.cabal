@@ -33,6 +33,7 @@ library
       Core.Type.EpisodeEntry
       Core.Type.Id
       Core.Type.User
+      Core.Type.UserFollow
       Crypto.PasswordStore
       DataModel.OrphanInstances
       DataModel.Persistent
@@ -50,7 +51,7 @@ library
       Paths_anime_rss
   hs-source-dirs:
       src
-  ghc-options: -Wall -Wimplicit-prelude -Wmissing-import-lists -ddump-splices
+  ghc-options: -Wall -Wimplicit-prelude -Wmissing-import-lists
   build-depends:
       HandsomeSoup
     , attoparsec

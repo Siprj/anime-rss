@@ -86,12 +86,12 @@ makeFieldLabelsWith noPrefixFieldLabels ''PostAnimeFollow
 
 type Protected
     = "user" :> Get '[JSON] User
-    :<|> "anime" :> ReqBody '[JSON] [PostAnimeFollow] :> Post '[JSON] [Anime]
-    :<|> "anime" :> Get '[JSON] [Anime]
+    :<|> "followe/anime" :> ReqBody '[JSON] [PostAnimeFollow] :> Post '[JSON] [Anime]
+    :<|> "animes" :> Get '[JSON] [Anime]
 
 type Api
     = "atom" :> Get '[AtomFeed] Feed
     :<|> "atom" :> "episodes" :> Capture "channel-id" ChannelId :> Get '[AtomFeed] Feed
-    :<|> "atom" :> "anime" :> Capture "channel-id" ChannelId :> Get '[AtomFeed] Feed
+    :<|> "atom" :> "animes" :> Capture "channel-id" ChannelId :> Get '[AtomFeed] Feed
     :<|> "login" :> ReqBody '[JSON] Login :> Post '[JSON] (Headers '[Header "Set-Cookie" SetCookie] NoContent)
     :<|> UserAuthentication :> Protected

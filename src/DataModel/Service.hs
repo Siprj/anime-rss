@@ -41,7 +41,6 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Reader (ReaderT)
 import Control.Monad ((>>), (>>=), void)
-import Control.Monad.Extra (whenJust)
 import Database.Persist
     ( Entity(Entity, entityVal)
     , (==.)
@@ -68,6 +67,7 @@ import qualified Core.Type.User as Core
     ( NewUser(NewUser, name, email, password)
     , User(User, userId, name, email, password, episodeChannel), Email
     )
+import Core.Type.UserFollow (UserFollow)
 import Control.Monad.Freer.Service
     ( IscCall(ChannelData, get, put)
     , ServiceChannel
@@ -81,7 +81,7 @@ import DataModel.Persistent
     , Anime(Anime, animeTitle, animeImgUrl, animeAnimeUrl)
     , User(User, userName, userEmail, userPassword, userNewEpisodeChannel)
     , EntityField(EpisodeDate, EpisodeAnimeId, UserEmail, UserId, AnimeId)
-    , UniqueAnimeTitle
+    , Unique(UniqueAnimeTitle)
     , migrateAll
     )
 import Database.Esqueleto ((^.), select, from, orderBy, desc, where_)
@@ -91,13 +91,14 @@ import Crypto.PasswordStore (PasswordHash)
 
 
 data DataModel s where
+    AddEpisodeEntryIfUnique :: EpisodeEntry -> DataModel ()
     AddUser :: Core.NewUser -> DataModel (Maybe Core.User)
-    ListUsers :: DataModel ([Core.User])
     DeleteUser :: UserId -> DataModel ()
+    ListAllFeeds :: DataModel ([Core.Episode], Maybe UTCTime)
+    ListUsers :: DataModel [Core.User]
+    ModifyUsersAnime :: UserId -> UserFollow -> DataModel ()
     SelectUserPassword :: Core.Email -> DataModel (Maybe PasswordHash)
     SelectUser :: UserId -> DataModel (Maybe Core.User)
-    AddEpisodeEntryIfUnique :: EpisodeEntry -> DataModel ()
-    ListAllFeeds :: DataModel ([Core.Episode], Maybe UTCTime)
 
 addEpisodeEntryifUnique :: Member DataModel effs => EpisodeEntry -> Eff effs ()
 addEpisodeEntryifUnique = send . AddEpisodeEntryIfUnique
@@ -121,6 +122,9 @@ selectUserPassword = send . SelectUserPassword
 selectUser :: Member DataModel effs => UserId -> Eff effs (Maybe Core.User)
 selectUser = send . SelectUser
 
+modifyUsersAnime :: Member DataModel effs => UserId -> UserFollow -> Eff effs (Maybe Core.User)
+modifyUsersAnime = send . ModifyUsersAnime
+
 instance IscCall DataModel where
     data ChannelData DataModel a = WrapDataModel (DataModel a)
 
@@ -142,9 +146,9 @@ processDataModel return' action = f action >> transactionSave
             return' $ fmap toCoreUser user'
         AddEpisodeEntryIfUnique animeEntry -> addEpisode animeEntry >>= return'
         ListAllFeeds -> do
-            feeds <- (fmap toCoreEpisode) <$> selectLastEpisodes
+            feeds <- fmap toCoreEpisode <$> selectLastEpisodes
             return' (feeds, Core.date <$> listToMaybe feeds)
-        ListUsers -> (fmap toCoreUser) <$> selectList [] [] >>= return'
+        ListUsers -> selectList [] [] >>= return' . fmap toCoreUser
         DeleteUser userId -> do
             delete . toSqlKey @User $ fromId userId
             return' ()
@@ -157,7 +161,7 @@ processDataModel return' action = f action >> transactionSave
 
 selectLastEpisodes :: DataModelMonad [(Entity Episode, Entity Anime)]
 selectLastEpisodes = do
-    select $ from $ \(anime, episode) -> do
+    select . from $ \(anime, episode) -> do
         where_ (anime ^. AnimeId Esql.==. episode ^. EpisodeAnimeId)
         orderBy [desc $ episode ^. EpisodeDate]
         pure (episode, anime)
@@ -193,16 +197,16 @@ createDbUser Core.NewUser{..} = do
 
 addEpisode :: EpisodeEntry -> DataModelMonad ()
 addEpisode EpisodeEntry{..} = do
-    currentTime <- liftIO $ getCurrentTime
+    currentTime <- liftIO getCurrentTime
     let anime = Anime
             { animeTitle = title
             , animeImgUrl = imageUrl
             , animeAnimeUrl = animeUrl
             , animeDate = currentTime
             }
-    mAnimeId <- upsertBy (UniqueAnimeTitle title) anime []
-    whenJust mAnimeId $ \(Entity key _) -> void . insertUniqueEntity $ Episode
-        { episodeAnimeId = key
+    (Entity animeId _) <- upsertBy (UniqueAnimeTitle title) anime []
+    void . insertUniqueEntity $ Episode
+        { episodeAnimeId = animeId
         , episodeUrl = url
         , episodeNumber = episodeNumber
         , episodeDate = currentTime
