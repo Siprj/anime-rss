@@ -20,8 +20,8 @@ module DataModel.Persistent
     , EntityField(..)
     , AnimeId
     , Anime(..)
-    , UsersAnime(..)
-    , UsersAnimeId
+    , UserFollow(..)
+    , UserFollowId
     , TemporaryKeyId
     , TemporaryKey(..)
     , Unique(..)
@@ -31,6 +31,7 @@ module DataModel.Persistent
 
 import Crypto.PasswordStore (PasswordHash)
 import Data.Int (Int)
+import Data.Bool (Bool)
 import Database.Persist.TH
     ( mkMigrate
     , share
@@ -79,20 +80,20 @@ TemporaryKey
 Anime
     title Text
     imgUrl URI
-    animeUrl URI
+    url URI
     date UTCTime
 
     UniqueAnimeTitle title
-    UniqueAnimeUrl animeUrl
+    UniqueAnimeUrl url
 
     deriving Show
 
-UsersAnime
-    userEmail Text
-    animeTitle Text
-    follow Text
+UserFollow
+    userId UserId
+    animeId AnimeId
+    follow Bool
+
+    UniqueUserFollow userId animeId
 
     deriving Show
-
 |]
-

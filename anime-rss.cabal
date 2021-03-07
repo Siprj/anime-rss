@@ -53,10 +53,9 @@ library
       src
   ghc-options: -Wall -Wimplicit-prelude -Wmissing-import-lists
   build-depends:
-      HandsomeSoup
-    , attoparsec
+      base >=4.7 && <5
     , aeson
-    , base >=4.7 && <5
+    , attoparsec
     , bytestring
     , cereal
     , conduit
@@ -68,6 +67,7 @@ library
     , extra
     , feed
     , freer-effects
+    , HandsomeSoup
     , haskell-src-exts
     , haskell-src-meta
     , http-media
@@ -77,6 +77,7 @@ library
     , monad-logger
     , mtl
     , network-uri
+    , optics
     , optics
     , parser-combinators
     , persistent
