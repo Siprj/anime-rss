@@ -11,25 +11,14 @@ module Scraper.Parser.Gogoanime
     )
   where
 
-import Control.Applicative ((<|>), pure)
+import Control.Applicative (pure)
 import Control.Arrow.ArrowList (isA)
 import Control.Arrow ((>>>), (|||), ArrowChoice, arr, returnA, zeroArrow)
 import Optics (lensVL, view)
-import Control.Monad ((>>=), void)
-import Data.Attoparsec.ByteString.Char8
-    ( Parser
-    , anyChar
-    , char
-    , decimal
-    , endOfInput
-    , manyTill
-    , parseOnly
-    )
 import Data.ByteString.Lazy.Char8 (unpack)
-import qualified Data.ByteString.Char8 as ByteString (pack)
-import Data.Either (Either)
+import Data.Either (Either (Left))
+import Data.Functor ((<&>), fmap)
 import Data.Function (($), (.), id)
-import Data.Int (Int)
 import Data.Maybe (fromJust, isJust)
 import Data.Semigroup ((<>))
 import Data.String (String)
@@ -51,7 +40,11 @@ import Text.XML.HXT.Core
 
 import Network.URI.Static (staticURI)
 import Core.Type.EpisodeEntry
-    (animeUrl, EpisodeEntry(EpisodeEntry, imageUrl, title, url, episodeNumber))
+    (animeUrl, EpisodeEntry(EpisodeEntry, imageUrl, title, url, number))
+import Data.List (break, reverse, stripPrefix, null)
+import Data.Eq ((==))
+import Data.Either.Combinators (maybeToRight)
+import Control.Monad (when)
 
 
 gogoanimeUrl :: URI
@@ -61,37 +54,31 @@ gogoanimeUrl = $$(staticURI "https://gogoanime.io/")
 -- determine that parser failed.
 getEntrisFromFronPage :: URI -> IO [EpisodeEntry]
 getEntrisFromFronPage url = do
-    data' <- get (show url) >>= (pure . unpack . view (lensVL responseBody))
-    runX $ (parseHtml data') >>> css ".items" >>> css ".img"
+    data' <- get (show url) <&> (unpack . view (lensVL responseBody))
+    runX $ parseHtml data' >>> css ".items" >>> css ".img"
         >>> deep (hasName "a" >>> parseEntry)
   where
     parseEntry :: (ArrowXml a, ArrowChoice a) => a XmlTree EpisodeEntry
     parseEntry = proc x -> do
         linkStr <- getAttrValue "href" -< x
         link <- arr parseRelativeReference >>> isA isJust >>> arr fromJust -< linkStr
-        episodeNumber <- arr episodeNumberParser >>> zeroArrow ||| arr id -< linkStr
+        (animeUrlStrin, number) <- arr episodeNumberAndLinkParser >>> zeroArrow ||| arr id -< linkStr
         title <- getAttrValue "title" >>> arr pack -< x
         imageUrl <- getChildren >>> hasName "img" >>> getAttrValue "src"
             >>> arr parseURI >>> isA isJust >>> arr fromJust -< x
-        animeUrl <- arr parseRelativeReference >>> isA isJust
-            >>> arr fromJust -< ("category/" <> linkStr)
+        animeUrl <- arr parseRelativeReference >>> isA isJust >>> arr fromJust -< animeUrlStrin
         returnA -< EpisodeEntry
             { url = link `relativeTo` url
             , title
             , imageUrl
-            , episodeNumber
-            , animeUrl
+            , number = pack number
+            , animeUrl = animeUrl `relativeTo` url
             }
 
-episodeNumberParser :: String -> Either String Int
-episodeNumberParser = parseOnly episodeNumberParser' . ByteString.pack
-  where
-    episodeNumberParser' :: Parser Int
-    episodeNumberParser' = do
-        void $ manyTill anyChar (char '-')
-        value <|> episodeNumberParser'
-      where
-        value = do
-            v <- decimal
-            endOfInput
-            pure v
+episodeNumberAndLinkParser :: String -> Either String (String, String)
+episodeNumberAndLinkParser input = do
+  let (rEpisodeNumber, rest) = break (== '-') $ reverse input
+      episodeNumber = reverse rEpisodeNumber
+  link <- fmap reverse . maybeToRight "`-episode-` is not present in the link" $ stripPrefix (reverse "-episode-") rest
+  when (null episodeNumber) $ Left "episode number is empty"
+  pure ("category/" <> link, episodeNumber)

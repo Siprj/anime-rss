@@ -28,7 +28,6 @@ import Control.Monad.Freer.Internal (Eff(E, Val))
 import Control.Monad.Freer.Reader (runReader)
 import Control.Monad.Freer (runM, send, runNat)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Applicative (pure)
 import Data.Function (($), (.), const)
 import Data.List (unlines)
 import Data.Text.Encoding (encodeUtf8)
@@ -38,7 +37,6 @@ import Data.Bool (Bool(True, False), (&&), not)
 import Text.Show (Show, show)
 import Data.Text (Text)
 import Data.Maybe (Maybe(Just, Nothing), maybe)
-import Rest (RssApi, Context(Context, baseUri, title), rssApiHandler)
 import Servant.Server (Handler, serve, hoistServer)
 import System.IO (IO)
 import Data.Eq (Eq, (==), (/=))
@@ -54,12 +52,10 @@ import Brick.Widgets.Core
   , vLimit
   , str
   )
-import qualified Brick.Widgets.Center as C
 import qualified Brick.Widgets.Edit as E
 import qualified Brick.AttrMap as A
 import qualified Brick.Focus as F
 import Brick.Util (on)
-import qualified Graphics.Vty as V
 import Brick
     ( App(App)
     , AttrMap
@@ -104,14 +100,13 @@ import Brick.Focus
   ( focusGetCurrent
   , focusRingCursor
   )
-import qualified Brick.Widgets.Edit as E
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as C
 import qualified Brick.Widgets.List as L
 
 import qualified Core.Type.User as Core
     ( NewUser(NewUser, name, email, password)
-    , User(User, userId, name, email, password, newAnimeChannel, newEpisodeChannel), Email
+    , User(User, userId, name, email, password, episodeChannel), Email
     )
 import Core.Type.Id (UserId, unsafeId)
 import Control.Monad.Freer.Service (ServiceChannel)
@@ -181,7 +176,7 @@ mkCreateUserForm = newForm
     ]
   where
     label s w = padBottom (Pad 1)
-        $ (vLimit 1 $ hLimit 17 $ str s <+> fill ' ') <+> w
+        $ vLimit 1 (hLimit 17 $ str s <+> fill ' ') <+> w
 
 
 theMap :: AttrMap
@@ -232,14 +227,14 @@ draw AppState{..} = draw' stage
                               ]
     draw' (AddingNewUser f) = [C.vCenter $ C.hCenter form]
         where
-          form = B.border $ padTop (Pad 1) $ hLimit 50 $ renderForm f
+          form = B.border . padTop (Pad 1) . hLimit 50 $ renderForm f
     draw' (Error err previousApp) = drawError err previousApp
 
 handleEvents :: AppState e -> BrickEvent Name e -> EventM Name (Next (AppState e))
 handleEvents s@AppState{..} = handleEvents' stage
   where
     handleEvents' UserList = \case
-        VtyEvent (V.EvResize {}) -> continue s
+        VtyEvent V.EvResize {} -> continue s
         VtyEvent (V.EvKey V.KEsc []) -> halt s
         VtyEvent (V.EvKey (V.KChar '+') []) -> do
             let initialUserInfo = NewUserInfo
@@ -259,15 +254,15 @@ handleEvents s@AppState{..} = handleEvents' stage
             userList' <- L.handleListEvent e userList
             M.continue $ s { userList = userList' }
     handleEvents' (AddingNewUser form) = \case
-        VtyEvent (V.EvResize {}) -> continue s
+        VtyEvent V.EvResize {} -> continue s
         VtyEvent (V.EvKey V.KEsc []) -> do
             continue $ s { stage = UserList }
         VtyEvent (V.EvKey V.KEnter []) -> do
             let newUser = formState form
-            let nameCheck = (newUser ^. #name /= "")
-            let emailCheck = (newUser ^. #email /= "")
-            let passwordEmpty = (newUser ^. #password /= "")
-            let passwordCheck = (newUser ^. #password == newUser ^. #passwordConfirm)
+            let nameCheck = newUser ^. #name /= ""
+            let emailCheck = newUser ^. #email /= ""
+            let passwordEmpty = newUser ^. #password /= ""
+            let passwordCheck = newUser ^. #password == newUser ^. #passwordConfirm
 
             if nameCheck && emailCheck && passwordEmpty && passwordCheck
                 then do
@@ -280,7 +275,7 @@ handleEvents s@AppState{..} = handleEvents' stage
                             let pos = length $ L.listElements userList
                             continue $ s
                                 { stage = UserList
-                                , userList = L.listInsert pos (toUserInfo user) $ userList
+                                , userList = L.listInsert pos (toUserInfo user) userList
                                 }
                 else
                     continue s { stage =
@@ -292,7 +287,7 @@ handleEvents s@AppState{..} = handleEvents' stage
             -- Example of external validation:
             -- Require age field to contain a value that is at least 18.
             let fs = formState form'
-            let passwordCheck = (fs ^. #password == fs ^. #passwordConfirm)
+            let passwordCheck = fs ^. #password == fs ^. #passwordConfirm
             continue $ s { stage = AddingNewUser $ setFieldValid passwordCheck PasswordConfirmField form' }
     handleEvents' (Error _ previousApp) = \case
         VtyEvent (V.EvKey _ _) -> continue previousApp

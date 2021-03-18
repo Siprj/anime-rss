@@ -20,7 +20,8 @@ import Data.Proxy (Proxy(Proxy))
 import Network.URI (URI)
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp (run)
-import Rest (RssApi, Context(Context, baseUri, title), rssApiHandler)
+import Rest.Server (Context(Context, baseUri), apiHander)
+import Rest.Api (Api)
 import Servant.Server (Handler, serve, hoistServer)
 import System.IO (IO, print)
 
@@ -53,14 +54,14 @@ main = do
     restApp :: ServiceChannel DataModel -> Application
     restApp databaseChan = serve restAPI (mainServer databaseChan)
 
-    restAPI :: Proxy RssApi
+    restAPI :: Proxy Api
     restAPI = Proxy
 
     mainServer databaseChan =
-        hoistServer restAPI (nat databaseChan) rssApiHandler
+        hoistServer restAPI (nat databaseChan) apiHander
     nat databaseChan eff =
         runM . intLiftIO . runDataModelEffect databaseChan
-        $ runReader eff (Context baseUrl "pokus")
+        $ runReader eff (Context baseUrl)
 
     runScraper' databaseChan =
         -- Time is is in milliseconds!!!

@@ -13,7 +13,6 @@ module Core.Type.EpisodeEntry
     )
   where
 
-import Data.Int (Int)
 import Data.Text (Text)
 import Network.URI (URI)
 import Text.Show (Show)
@@ -25,7 +24,7 @@ data EpisodeEntry = EpisodeEntry
     , url :: URI
     , imageUrl :: URI
     , animeUrl :: URI
-    , episodeNumber :: Int
+    , number :: Text
     }
   deriving (Show)
 

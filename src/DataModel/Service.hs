@@ -24,7 +24,6 @@ module DataModel.Service
     , addUser
     , createDataModelChannel
     , addEpisodeEntryifUnique
---    , listAllFeeds
     , runDataModel
     , runDataModelEffect
     , listUsers
@@ -34,6 +33,7 @@ module DataModel.Service
     , modifyUsersAnime
     , listAnime
     , listUserRelatedAnime
+    , listChannelEpisodes
     )
   where
 
@@ -64,12 +64,14 @@ import Data.Time.Clock (getCurrentTime)
 import Data.UUID.V4 (nextRandom)
 import System.IO (IO)
 
-import Core.Type.EpisodeEntry (EpisodeEntry(EpisodeEntry, title, url, imageUrl, episodeNumber, animeUrl))
+import Core.Type.EpisodeEntry (EpisodeEntry(EpisodeEntry, title, url, imageUrl, number, animeUrl))
 import Core.Type.Id (fromId, UserId, unsafeId)
 import qualified Core.Type.User as Core
     ( NewUser(NewUser, name, email, password)
     , User(User, userId, name, email, password, episodeChannel), Email
     )
+import qualified Core.Type.Episode as Core
+    ( Episode(Episode, title, url, imageUrl, date, number))
 import qualified Core.Type.UserFollow as Core
     ( UserFollow(UserFollow, userId , animeId , follow)
     )
@@ -89,18 +91,19 @@ import DataModel.Persistent
     , Episode(Episode, episodeUrl, episodeNumber, episodeDate, episodeAnimeId)
     , Anime(Anime, animeTitle, animeImgUrl, animeUrl)
     , User(User, userName, userEmail, userPassword, userNewEpisodeChannel)
-    , EntityField(UserEmail, UserId, AnimeId, UserFollowFollow, AnimeDate, UserFollowUserId, UserFollowAnimeId)
+    , EntityField(UserEmail, UserId, AnimeId, UserFollowFollow, AnimeDate, UserFollowUserId, UserFollowAnimeId, EpisodeDate, EpisodeAnimeId, UserNewEpisodeChannel)
 
     , UserFollow(UserFollow, userFollowUserId, userFollowAnimeId, userFollowFollow)
     , migrateAll
     )
-import Database.Esqueleto ((^.), select, from, orderBy, desc, where_, LeftOuterJoin(LeftOuterJoin), on, (?.), just, val, Value(Value), coalesceDefault)
+import Database.Esqueleto ((^.), select, from, orderBy, desc, where_, LeftOuterJoin(LeftOuterJoin), on, (?.), just, val, Value(Value), coalesceDefault, InnerJoin(InnerJoin), limit)
 import qualified Database.Esqueleto as Esql ((==.))
 
 import Crypto.PasswordStore (PasswordHash)
 import Data.Either (either)
 import Data.Bool (Bool (False))
 import Data.Tuple (uncurry)
+import Data.UUID (UUID)
 
 
 data DataModel s where
@@ -116,13 +119,10 @@ data DataModel s where
     AddEpisodeEntryIfUnique :: EpisodeEntry -> DataModel ()
     ListAnime :: DataModel [Core.Anime]
     ListUserRelatedAnime :: UserId -> DataModel [Core.UserRelatedAnime]
---     ListAllFeeds :: DataModel ([Core.Episode], Maybe UTCTime)
+    ListChannelEpisodes :: UUID -> DataModel [Core.Episode]
 
 addEpisodeEntryifUnique :: Member DataModel effs => EpisodeEntry -> Eff effs ()
 addEpisodeEntryifUnique = send . AddEpisodeEntryIfUnique
-
--- listAllFeeds :: Member DataModel effs => Eff effs ([Core.Episode], Maybe UTCTime)
--- listAllFeeds = send ListAllFeeds
 
 addUser :: Member DataModel effs => Core.NewUser -> Eff effs (Maybe Core.User)
 addUser = send . AddUser
@@ -148,6 +148,9 @@ listAnime = send ListAnime
 
 listUserRelatedAnime :: Member DataModel effs => UserId -> Eff effs [Core.UserRelatedAnime]
 listUserRelatedAnime = send . ListUserRelatedAnime
+
+listChannelEpisodes :: Member DataModel effs => UUID -> Eff effs [Core.Episode]
+listChannelEpisodes = send . ListChannelEpisodes
 
 instance IscCall DataModel where
     data ChannelData DataModel a = WrapDataModel (DataModel a)
@@ -182,9 +185,6 @@ processDataModel return' action = f action >> transactionSave
 
         -- Anime manipulation
         AddEpisodeEntryIfUnique animeEntry -> addEpisode animeEntry >>= return'
---        ListAllFeeds -> do
---            feeds <- fmap toCoreEpisode <$> selectLastEpisodes
---            return' (feeds, view #date <$> listToMaybe feeds)
         ModifyUsersAnime userFollow@Core.UserFollow{..} -> do
             void $ upsert (fromUserFollow userFollow) [UserFollowFollow =. follow]
             anime <- selectFirst [AnimeId ==. (toSqlKey @Anime $ fromId animeId)] []
@@ -192,6 +192,10 @@ processDataModel return' action = f action >> transactionSave
         ListAnime -> selectAnimes >>= return' . fmap toCoreAnime
         ListUserRelatedAnime userId -> do
             selectUserRelatedAnimes userId >>= return' . fmap (uncurry toCoreUserRelatedAnime)
+        ListChannelEpisodes channelId -> do
+            selectEpisodesByChannelId channelId >>= return' . fmap toCoreEpisode
+
+
 
 selectAnimes :: DataModelMonad [Entity Anime]
 selectAnimes = selectList [] [Desc AnimeDate]
@@ -206,16 +210,25 @@ selectUserRelatedAnimes userId = do
         where_ (userFollow ?. UserFollowUserId Esql.==. just (val (toSqlKey @User $ fromId userId)))
         pure (coalesceDefault [userFollow ?. UserFollowFollow] (val False), anime)
 
+selectEpisodesByChannelId :: UUID -> DataModelMonad [(Entity Episode, Entity Anime)]
+selectEpisodesByChannelId channelId = do
+    select . from $ \(episode `InnerJoin` userFollow `InnerJoin` user `InnerJoin` anime) -> do
+        orderBy [desc $ episode ^. EpisodeDate]
+        limit 500
+        on ((episode ^. EpisodeAnimeId) Esql.==. userFollow ^. UserFollowAnimeId)
+        on ((userFollow ^. UserFollowUserId) Esql.==. user ^. UserId)
+        on ((userFollow ^. UserFollowAnimeId) Esql.==. anime ^. AnimeId)
+        where_ (user ^. UserNewEpisodeChannel Esql.==. val channelId)
+        pure (episode, anime)
 
--- toCoreEpisode :: (Entity Episode, Entity Anime) -> Core.Episode
--- toCoreEpisode (Entity key Episode{..}, Entity _ Anime{..}) = Core.Episode
---     { episodeId = unsafeId $ fromSqlKey key
---     , title = animeTitle
---     , imageUrl = animeImgUrl
---     , date = episodeDate
---     , url = episodeUrl
---     , number = episodeNumber
---     }
+toCoreEpisode :: (Entity Episode, Entity Anime) -> Core.Episode
+toCoreEpisode (Entity _ Episode{..}, Entity _ Anime{..}) = Core.Episode
+    { title = animeTitle
+    , imageUrl = animeImgUrl
+    , date = episodeDate
+    , url = episodeUrl
+    , number = episodeNumber
+    }
 
 fromUserFollow :: Core.UserFollow -> UserFollow
 fromUserFollow Core.UserFollow{..} = UserFollow
@@ -275,7 +288,7 @@ addEpisode EpisodeEntry{..} = do
     void . insertUniqueEntity $ Episode
         { episodeAnimeId = animeId
         , episodeUrl = url
-        , episodeNumber = episodeNumber
+        , episodeNumber = number
         , episodeDate = currentTime
         }
 

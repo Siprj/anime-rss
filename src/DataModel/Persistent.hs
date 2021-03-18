@@ -30,7 +30,6 @@ module DataModel.Persistent
   where
 
 import Crypto.PasswordStore (PasswordHash)
-import Data.Int (Int)
 import Data.Bool (Bool)
 import Database.Persist.TH
     ( mkMigrate
@@ -51,7 +50,7 @@ import Data.UUID (UUID)
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 Episode
     url URI
-    number Int
+    number Text
     date UTCTime
     animeId AnimeId
 

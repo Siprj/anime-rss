@@ -13,8 +13,6 @@ module Core.Type.Episode
     )
   where
 
-import Core.Type.Id (AnimeId)
-import Data.Int (Int)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Network.URI (URI)
@@ -22,12 +20,11 @@ import Optics (makeFieldLabelsWith, noPrefixFieldLabels)
 import Text.Show (Show)
 
 data Episode = Episode
-    { episodeId :: AnimeId
-    , title :: Text
+    { title :: Text
     , url :: URI
     , imageUrl :: URI
     , date :: UTCTime
-    , number :: Int
+    , number :: Text
     }
   deriving (Show)
 

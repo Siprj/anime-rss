@@ -34,7 +34,9 @@ runScraper time = do
     send $ putStrLn "running scraper"
     -- TODO: Collect errors into EGK.
     entries <- send $ getEntrisFromFronPage gogoanimeUrl
+    send $ putStrLn "data from gogoanime received"
     -- TODO: Test how long it took to insert data into database and log it.
     mapM_ addEpisodeEntryifUnique entries
+    send $ putStrLn "scrapper finished"
     send $ threadDelay time
     runScraper time
