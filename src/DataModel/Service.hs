@@ -29,6 +29,7 @@ module DataModel.Service
     , listUsers
     , deleteUser
     , selectUser
+    , selectUserByEmail
     , selectUserPassword
     , modifyUsersAnime
     , listAnime
@@ -46,17 +47,18 @@ import Control.Monad.Trans.Reader (ReaderT)
 import Control.Monad ((>>), (>>=), void)
 import Database.Persist
     ( Entity(Entity, entityVal, entityKey)
+    , SelectOpt (Desc)
     , (==.)
-    , (=.)
-    , insertUniqueEntity
-    , upsert
-    , selectList
-    , selectFirst
     , delete
-    , insertBy, SelectOpt (Desc)
+    , insertBy
+    , insertUniqueEntity
+    , putMany
+    , selectFirst
+    , selectList
     )
+import Database.Persist.Class (toPersistValue)
 import Database.Persist.Sqlite (runSqlite)
-import Database.Persist.Sql (SqlBackend, runMigration, fromSqlKey, toSqlKey, transactionSave)
+import Database.Persist.Sql (SqlBackend, Single(Single), runMigration, fromSqlKey, toSqlKey, transactionSave, rawSql)
 import Data.Function (($), (.), id)
 import Data.Functor (Functor(fmap))
 import Data.Maybe (Maybe)
@@ -91,19 +93,19 @@ import DataModel.Persistent
     , Episode(Episode, episodeUrl, episodeNumber, episodeDate, episodeAnimeId)
     , Anime(Anime, animeTitle, animeImgUrl, animeUrl)
     , User(User, userName, userEmail, userPassword, userNewEpisodeChannel)
-    , EntityField(UserEmail, UserId, AnimeId, UserFollowFollow, AnimeDate, UserFollowUserId, UserFollowAnimeId, EpisodeDate, EpisodeAnimeId, UserNewEpisodeChannel)
+    , EntityField(UserEmail, UserId, AnimeId, AnimeDate, UserFollowUserId, UserFollowAnimeId, EpisodeDate, EpisodeAnimeId, UserNewEpisodeChannel)
 
     , UserFollow(UserFollow, userFollowUserId, userFollowAnimeId, userFollowFollow)
     , migrateAll
     )
-import Database.Esqueleto ((^.), select, from, orderBy, desc, where_, LeftOuterJoin(LeftOuterJoin), on, (?.), just, val, Value(Value), coalesceDefault, InnerJoin(InnerJoin), limit)
+import Database.Esqueleto ((^.), select, from, orderBy, desc, where_, on, val, InnerJoin(InnerJoin), limit)
 import qualified Database.Esqueleto as Esql ((==.))
 
 import Crypto.PasswordStore (PasswordHash)
 import Data.Either (either)
-import Data.Bool (Bool (False))
 import Data.Tuple (uncurry)
 import Data.UUID (UUID)
+import Data.Bool (Bool)
 
 
 data DataModel s where
@@ -113,9 +115,10 @@ data DataModel s where
     ListUsers :: DataModel [Core.User]
     SelectUserPassword :: Core.Email -> DataModel (Maybe PasswordHash)
     SelectUser :: UserId -> DataModel (Maybe Core.User)
+    SelectUserByEmail :: Core.Email ->  DataModel (Maybe Core.User)
 
     -- Anime manipulation
-    ModifyUsersAnime :: Core.UserFollow -> DataModel (Maybe Core.UserRelatedAnime)
+    ModifyUsersAnime :: [Core.UserFollow] -> DataModel ()
     AddEpisodeEntryIfUnique :: EpisodeEntry -> DataModel ()
     ListAnime :: DataModel [Core.Anime]
     ListUserRelatedAnime :: UserId -> DataModel [Core.UserRelatedAnime]
@@ -140,7 +143,10 @@ selectUserPassword = send . SelectUserPassword
 selectUser :: Member DataModel effs => UserId -> Eff effs (Maybe Core.User)
 selectUser = send . SelectUser
 
-modifyUsersAnime :: Member DataModel effs => Core.UserFollow -> Eff effs (Maybe Core.UserRelatedAnime)
+selectUserByEmail :: Member DataModel effs => Core.Email -> Eff effs (Maybe Core.User)
+selectUserByEmail = send . SelectUserByEmail
+
+modifyUsersAnime :: Member DataModel effs => [Core.UserFollow] -> Eff effs ()
 modifyUsersAnime = send . ModifyUsersAnime
 
 listAnime :: Member DataModel effs => Eff effs [Core.Anime]
@@ -182,13 +188,14 @@ processDataModel return' action = f action >> transactionSave
         SelectUser userId -> do
             user <- selectFirst [UserId ==. (toSqlKey @User $ fromId userId)] []
             return' $ fmap toCoreUser user
+        SelectUserByEmail email -> do
+            selectFirst [UserEmail ==. email] [] >>= return' . fmap toCoreUser
 
         -- Anime manipulation
         AddEpisodeEntryIfUnique animeEntry -> addEpisode animeEntry >>= return'
-        ModifyUsersAnime userFollow@Core.UserFollow{..} -> do
-            void $ upsert (fromUserFollow userFollow) [UserFollowFollow =. follow]
-            anime <- selectFirst [AnimeId ==. (toSqlKey @Anime $ fromId animeId)] []
-            return' $ fmap (toCoreUserRelatedAnime (Value follow)) anime
+        ModifyUsersAnime userFollows -> do
+            putMany (fmap fromUserFollow userFollows)
+            return' ()
         ListAnime -> selectAnimes >>= return' . fmap toCoreAnime
         ListUserRelatedAnime userId -> do
             selectUserRelatedAnimes userId >>= return' . fmap (uncurry toCoreUserRelatedAnime)
@@ -202,13 +209,14 @@ selectAnimes = selectList [] [Desc AnimeDate]
 
 -- TODO: Chekc this works as expected.
 --   This part looks broken: just (val (toSqlKey @User $ fromId userId)))
-selectUserRelatedAnimes :: UserId -> DataModelMonad [(Value Bool, Entity Anime)]
+selectUserRelatedAnimes :: UserId -> DataModelMonad [(Single Bool, Entity Anime)]
 selectUserRelatedAnimes userId = do
-    select . from $ \(anime `LeftOuterJoin` userFollow) -> do
-        on (just (anime ^. AnimeId) Esql.==. userFollow ?. UserFollowAnimeId)
-        orderBy [desc $ anime ^. AnimeDate]
-        where_ (userFollow ?. UserFollowUserId Esql.==. just (val (toSqlKey @User $ fromId userId)))
-        pure (coalesceDefault [userFollow ?. UserFollowFollow] (val False), anime)
+    rawSql "WITH b AS (SELECT * from user_follow WHERE user_follow.user_id = ?) SELECT coalesce(b.follow, FALSE) as follow, ?? FROM anime LEFT JOIN b ON anime.id = b.anime_id" [toPersistValue . toSqlKey @User $ fromId userId]
+--    select . from $ \(anime `LeftOuterJoin` userFollow) -> do
+--        on (just (anime ^. AnimeId) Esql.==. userFollow ?. UserFollowAnimeId)
+--        orderBy [desc $ anime ^. AnimeDate]
+--        where_ (userFollow ?. UserFollowUserId Esql.==. just (val (toSqlKey @User $ fromId userId)))
+--        pure (coalesceDefault [userFollow ?. UserFollowFollow] (val False), anime)
 
 selectEpisodesByChannelId :: UUID -> DataModelMonad [(Entity Episode, Entity Anime)]
 selectEpisodesByChannelId channelId = do
@@ -255,8 +263,8 @@ toCoreAnime (Entity key Anime{..}) = Core.Anime
     , date = animeDate
     }
 
-toCoreUserRelatedAnime :: Value Bool -> Entity Anime -> Core.UserRelatedAnime
-toCoreUserRelatedAnime (Value following) (Entity key Anime{..}) = Core.UserRelatedAnime
+toCoreUserRelatedAnime :: Single Bool -> Entity Anime -> Core.UserRelatedAnime
+toCoreUserRelatedAnime (Single following) (Entity key Anime{..}) = Core.UserRelatedAnime
     { animeId = unsafeId $ fromSqlKey key
     , title = animeTitle
     , url = animeUrl

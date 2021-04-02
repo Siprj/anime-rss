@@ -23,12 +23,12 @@ module Rest.Api
     , PostAnimeFollow(..)
     , User(..)
     , ChannelId
+    , LoggedInUser(..)
     )
   where
 
 import Core.Type.Id (UserId, AnimeId)
 import Core.Type.User (Email)
-import Web.Cookie (SetCookie)
 import Data.Bool (Bool)
 import Data.Eq (Eq)
 import Data.Text (Text)
@@ -37,12 +37,23 @@ import Data.UUID (UUID)
 import GHC.Generics (Generic)
 import Optics (makeFieldLabelsWith, noPrefixFieldLabels)
 import Rest.AtomMime (AtomFeed)
---import Rest.Authentication (UserAuthentication)
 import Servant.API (Header, Headers, Capture, ReqBody, (:<|>), (:>), Get, JSON, Post)
 import Text.Feed.Types (Feed)
 import Text.Show (Show)
-import Servant (NoContent)
+import Servant (NoContent, Verb, StdMethod (POST))
 import Data.Aeson (ToJSON, FromJSON, toEncoding, genericToEncoding, defaultOptions)
+import Servant.Auth.Server (SetCookie, Auth, Cookie, ToJWT, FromJWT)
+
+
+newtype LoggedInUser = LoggedInUser
+    { userId :: UserId
+    }
+  deriving (Show, Eq, Generic)
+
+instance ToJSON LoggedInUser
+instance ToJWT LoggedInUser
+instance FromJSON LoggedInUser
+instance FromJWT LoggedInUser
 
 
 type ChannelId = UUID
@@ -99,10 +110,10 @@ instance FromJSON PostAnimeFollow
 
 type Protected
     = "user" :> Get '[JSON] User
-    :<|> "followe" :> "anime" :> ReqBody '[JSON] [PostAnimeFollow] :> Post '[JSON] [Anime]
+    :<|> "followe" :> "anime" :> ReqBody '[JSON] [PostAnimeFollow] :> Verb 'POST 204 '[JSON] NoContent
     :<|> "animes" :> Get '[JSON] [Anime]
 
 type Api = "atom" :> "episodes" :> Capture "channel-id" ChannelId :> Get '[AtomFeed] Feed
     :<|> "atom" :> "animes" :> Get '[AtomFeed] Feed
-    :<|> "login" :> ReqBody '[JSON] Login :> Post '[JSON] (Headers '[Header "Set-Cookie" SetCookie] NoContent)
---    :<|> UserAuthentication :> Protected
+    :<|> "login" :> ReqBody '[JSON] Login :> Post '[JSON] (Headers '[Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
+    :<|> Servant.Auth.Server.Auth '[Cookie] LoggedInUser :> Protected

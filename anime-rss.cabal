@@ -179,6 +179,8 @@ executable anime-rss
     , warp
     , network-uri
     , servant-server
+    , servant-auth
+    , servant-auth-server
     , freer-effects
   if flag(pedantic)
     ghc-options: -Werror

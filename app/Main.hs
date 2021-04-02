@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeOperators #-}
@@ -22,7 +23,8 @@ import Network.Wai (Application)
 import Network.Wai.Handler.Warp (run)
 import Rest.Server (Context(Context, baseUri), apiHander)
 import Rest.Api (Api)
-import Servant.Server (Handler, serve, hoistServer)
+import Servant.Server (Handler, serve, hoistServer, Context ((:.), EmptyContext), serveWithContext, HasServer (hoistServerWithContext))
+import qualified Servant.Server as Servant (Context)
 import System.IO (IO, print)
 
 import Control.Monad.Freer.Service (ServiceChannel)
@@ -34,6 +36,7 @@ import DataModel.Service
     )
 import Network.URI.Static (staticURI)
 import Scraper.Service (runScraper)
+import Servant.Auth.Server (defaultCookieSettings, defaultJWTSettings, generateKey, CookieSettings (cookieIsSecure), JWTSettings, IsSecure (NotSecure))
 
 
 baseUrl :: URI
@@ -45,23 +48,25 @@ main = do
     forkIO $ runDataModel databaseChan
 
     forkIO $ runScraper' databaseChan
-    run 8081 (restApp databaseChan)
+    restApp databaseChan
   where
 
-    -- 'serve' comes from servant and hands you a WAI Application,
-    -- which you can think of as an "abstract" web application,
-    -- not yet a webserver.
-    restApp :: ServiceChannel DataModel -> Application
-    restApp databaseChan = serve restAPI (mainServer databaseChan)
+    restApp :: ServiceChannel DataModel -> IO ()
+    restApp databaseChan = do
+        myKey <- generateKey
+        let cookiesSettings = defaultCookieSettings { cookieIsSecure = NotSecure }
+            jwtCfg = defaultJWTSettings myKey
+            cfg = cookiesSettings :. jwtCfg :. EmptyContext
+            nat databaseChan eff =
+                runM . intLiftIO . runDataModelEffect databaseChan
+                $ runReader eff (Context baseUrl cookiesSettings jwtCfg )
+
+        run 8081 .  serveWithContext restAPI cfg $
+                hoistServerWithContext restAPI (Proxy :: Proxy '[CookieSettings, JWTSettings]) (nat databaseChan) apiHander
 
     restAPI :: Proxy Api
     restAPI = Proxy
 
-    mainServer databaseChan =
-        hoistServer restAPI (nat databaseChan) apiHander
-    nat databaseChan eff =
-        runM . intLiftIO . runDataModelEffect databaseChan
-        $ runReader eff (Context baseUrl)
 
     runScraper' databaseChan =
         -- Time is is in milliseconds!!!
@@ -70,3 +75,4 @@ main = do
 
 intLiftIO :: Eff '[IO, Handler] r -> Eff '[Handler] r
 intLiftIO = runNat (liftIO :: IO a -> Handler a)
+
