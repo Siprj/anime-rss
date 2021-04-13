@@ -1,2 +1,4 @@
 .stack-work/
 dist-newstyle/
+elm-stuff/
+node_modules/

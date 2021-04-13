@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@elm-tooling/elm-language-server": "^2.1.0",
+    "elm": "*",
+    "elm-format": "^0.8.5",
+    "elm-test": "*",
+    "node": "^15.12.0"
+  }
+}
