@@ -98,8 +98,8 @@ import DataModel.Persistent
     , UserFollow(UserFollow, userFollowUserId, userFollowAnimeId, userFollowFollow)
     , migrateAll
     )
-import Database.Esqueleto ((^.), select, from, orderBy, desc, where_, on, val, InnerJoin(InnerJoin), limit)
-import qualified Database.Esqueleto as Esql ((==.))
+import Database.Esqueleto.Legacy ((^.), select, from, orderBy, desc, where_, on, val, InnerJoin(InnerJoin), limit)
+import qualified Database.Esqueleto.Legacy as Esql ((==.))
 
 import Crypto.PasswordStore (PasswordHash)
 import Data.Either (either)

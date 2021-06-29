@@ -61,7 +61,7 @@ main = do
                 runM . intLiftIO . runDataModelEffect databaseChan
                 $ runReader eff (Context baseUrl cookiesSettings jwtCfg )
 
-        run 8081 .  serveWithContext restAPI cfg $
+        run 8082 .  serveWithContext restAPI cfg $
                 hoistServerWithContext restAPI (Proxy :: Proxy '[CookieSettings, JWTSettings]) (nat databaseChan) apiHander
 
     restAPI :: Proxy Api
