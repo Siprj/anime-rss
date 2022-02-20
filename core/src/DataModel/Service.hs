@@ -1,15 +1,12 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
@@ -210,7 +207,7 @@ selectAnimes = selectList [] [Desc AnimeDate]
 -- TODO: Chekc this works as expected.
 --   This part looks broken: just (val (toSqlKey @User $ fromId userId)))
 selectUserRelatedAnimes :: UserId -> DataModelMonad [(Single Bool, Entity Anime)]
-selectUserRelatedAnimes userId = do
+selectUserRelatedAnimes userId =
     rawSql "WITH b AS (SELECT * from user_follow WHERE user_follow.user_id = ?) SELECT coalesce(b.follow, FALSE) as follow, ?? FROM anime LEFT JOIN b ON anime.id = b.anime_id" [toPersistValue . toSqlKey @User $ fromId userId]
 --    select . from $ \(anime `LeftOuterJoin` userFollow) -> do
 --        on (just (anime ^. AnimeId) Esql.==. userFollow ?. UserFollowAnimeId)
@@ -219,15 +216,15 @@ selectUserRelatedAnimes userId = do
 --        pure (coalesceDefault [userFollow ?. UserFollowFollow] (val False), anime)
 
 selectEpisodesByChannelId :: UUID -> DataModelMonad [(Entity Episode, Entity Anime)]
-selectEpisodesByChannelId channelId = do
+selectEpisodesByChannelId channelId =
     select . from $ \(episode `InnerJoin` userFollow `InnerJoin` user `InnerJoin` anime) -> do
-        orderBy [desc $ episode ^. EpisodeDate]
-        limit 500
-        on ((episode ^. EpisodeAnimeId) Esql.==. userFollow ^. UserFollowAnimeId)
-        on ((userFollow ^. UserFollowUserId) Esql.==. user ^. UserId)
-        on ((userFollow ^. UserFollowAnimeId) Esql.==. anime ^. AnimeId)
-        where_ (user ^. UserNewEpisodeChannel Esql.==. val channelId)
-        pure (episode, anime)
+    orderBy [desc $ episode ^. EpisodeDate]
+    limit 500
+    on ((episode ^. EpisodeAnimeId) Esql.==. userFollow ^. UserFollowAnimeId)
+    on ((userFollow ^. UserFollowUserId) Esql.==. user ^. UserId)
+    on ((userFollow ^. UserFollowAnimeId) Esql.==. anime ^. AnimeId)
+    where_ (user ^. UserNewEpisodeChannel Esql.==. val channelId)
+    pure (episode, anime)
 
 toCoreEpisode :: (Entity Episode, Entity Anime) -> Core.Episode
 toCoreEpisode (Entity _ Episode{..}, Entity _ Anime{..}) = Core.Episode
