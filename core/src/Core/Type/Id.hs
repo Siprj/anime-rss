@@ -26,7 +26,7 @@ data IdKind
     | User
 
 newtype Id (a :: IdKind) = Id Int64
-  deriving (Show, Eq)
+  deriving stock (Show, Eq)
   deriving newtype (FromJSON, ToJSON)
 
 type AnimeId = Id 'Anime

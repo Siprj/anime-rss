@@ -36,7 +36,9 @@ updateWithStorage msg model = case msg of
 --    GotAnimeList (Result Http.Error (List Anime)) -> (model, Cmd.none)
     GotAnimeList res -> case res of
         Err err -> case err of
-            Http.BadStatus _ -> Debug.log "GotAnimeList:Http.BadStatus" ({model | page = LoginPage}, Cmd.none)
+            Http.BadStatus v -> case v of
+                401 ->
+                    Debug.log (String.append "GotAnimeList:Http.BadStatus" (String.fromInt v)) ({model | page = LoginPage}, Cmd.none)
             _ -> Debug.log "GotAnimeList:_" (model, Cmd.none)
         Ok _ -> Debug.log "GotAnimeList" (model, Cmd.none)
     Logout ->  Debug.log "GotAnimeList" (model, Cmd.none)
@@ -131,7 +133,6 @@ type alias Model =
     { loginInfo : Maybe LoginInfo
     , profile : Maybe Profile
     , page : Page
-    , animeList : Maybe Anime
     }
 
 type alias Profile =
@@ -161,7 +162,7 @@ animeDecode = D.list <| D.map3 Anime
 
 fetchAnimeListCmd : Cmd Msg
 fetchAnimeListCmd = Http.get
-    { url = "/anime_list"
+    { url = "/animes"
     , expect = Http.expectJson GotAnimeList animeDecode
     }
 
@@ -180,7 +181,6 @@ emptyModel =
     { loginInfo = Nothing
     , profile = Nothing
     , page = LoadingPage
-    , animeList = Nothing
     }
 
 init : Value -> Url -> Nav.Key -> ( Model, Cmd Msg )

@@ -7,25 +7,26 @@
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DerivingStrategies #-}
 
-module Core.Type.Episode
-    ( Episode(..)
+module Core.Type.EpisodeEntry
+    ( EpisodeEntry(..)
     )
   where
 
 import Data.Text (Text)
-import Data.Time.Clock (UTCTime)
 import Network.URI (URI)
-import Optics (makeFieldLabelsWith, noPrefixFieldLabels)
 import Text.Show (Show)
+import Optics (makeFieldLabelsWith, noPrefixFieldLabels)
 
-data Episode = Episode
+
+data EpisodeEntry = EpisodeEntry
     { title :: Text
     , url :: URI
     , imageUrl :: URI
-    , date :: UTCTime
+    , animeUrl :: URI
     , number :: Text
     }
-  deriving (Show)
+  deriving stock (Show)
 
-makeFieldLabelsWith noPrefixFieldLabels ''Episode
+makeFieldLabelsWith noPrefixFieldLabels ''EpisodeEntry

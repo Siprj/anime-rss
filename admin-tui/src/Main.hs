@@ -13,6 +13,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DerivingStrategies #-}
 
 module Main
     (main)
@@ -21,40 +22,34 @@ module Main
 import Data.Functor (fmap)
 import Data.String (String)
 import Crypto.Error (throwCryptoErrorIO)
-import Control.Applicative ((<|>), (<$>), pure)
+import Control.Applicative ((<|>), pure)
 import Control.Concurrent (forkIO)
-import Control.Monad (Monad, void, (>>=), fail, when)
-import Control.Monad.Freer.Internal (Eff(E, Val))
-import Control.Monad.Freer.Reader (runReader)
-import Control.Monad.Freer (runM, send, runNat)
+import Control.Monad (void, (>>=))
+import Control.Monad.Freer (runM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Function (($), (.), const)
 import Data.List (unlines)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Semigroup ((<>))
-import Data.Monoid (Monoid, mempty)
-import Data.Bool (Bool(True, False), (&&), not)
+import Data.Monoid (mempty)
+import Data.Bool (Bool(True), (&&), not)
 import Text.Show (Show, show)
 import Data.Text (Text)
-import Data.Maybe (Maybe(Just, Nothing), maybe)
-import Servant.Server (Handler, serve, hoistServer)
+import Data.Maybe (Maybe(Just, Nothing))
 import System.IO (IO)
 import Data.Eq (Eq, (==), (/=))
 import Data.Ord (Ord)
-import Optics (lensVL, (^.), makeFieldLabelsWith, noPrefixFieldLabels, toLensVL)
+import Optics ((^.), makeFieldLabelsWith, noPrefixFieldLabels, toLensVL)
 import qualified Graphics.Vty as V
 import qualified Brick.Main as M
-import qualified Brick.Types as T
 import Brick.Widgets.Core
   ( (<+>)
-  , (<=>)
   , hLimit
   , vLimit
   , str
   )
 import qualified Brick.Widgets.Edit as E
 import qualified Brick.AttrMap as A
-import qualified Brick.Focus as F
 import Brick.Util (on)
 import Brick
     ( App(App)
@@ -71,7 +66,7 @@ import Brick
     , fg
     , fill
     , halt
-    , hBox
+
     , padBottom
     , padTop
     , vBox
@@ -85,20 +80,19 @@ import Brick.Forms
   , setFieldValid
   , renderForm
   , handleFormEvent
-  , invalidFields
-  , allFieldsValid
+
+
   , focusedFormInputAttr
   , invalidFormInputAttr
-  , checkboxField
-  , radioField
-  , editShowableField
+
+
+
   , editTextField
   , editPasswordField
   , (@@=)
   )
 import Brick.Focus
-  ( focusGetCurrent
-  , focusRingCursor
+  ( focusRingCursor
   )
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as C
@@ -106,9 +100,9 @@ import qualified Brick.Widgets.List as L
 
 import qualified Core.Type.User as Core
     ( NewUser(NewUser, name, email, password)
-    , User(User, userId, name, email, password, episodeChannel), Email
+    , User(User, userId, name, email, password, episodeChannel)
     )
-import Core.Type.Id (UserId, unsafeId)
+import Core.Type.Id (UserId)
 import Control.Monad.Freer.Service (ServiceChannel)
 import DataModel.Service
     ( DataModel
@@ -118,11 +112,9 @@ import DataModel.Service
     , listUsers
     , runDataModel
     , runDataModelEffect)
-import Scraper.Service (runScraper)
-import GHC.Num (Num((+)))
 import Data.Foldable (Foldable(length))
 import Data.Vector (Vector, fromList)
-import Crypto.PasswordStore (PasswordHash, hashPassword, defaultOptions)
+import Crypto.PasswordStore (hashPassword, defaultOptions)
 
 
 data Name
@@ -132,14 +124,14 @@ data Name
     | PasswordConfirmField
     | UserListWidget
     | ErrorWidget
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 data UserInfo = UserInfo
     { userId :: UserId
     , name :: Text
     , email :: Text
     }
-  deriving (Show)
+  deriving stock (Show)
 
 makeFieldLabelsWith noPrefixFieldLabels ''UserInfo
 
@@ -149,7 +141,7 @@ data NewUserInfo = NewUserInfo
     , password  :: Text
     , passwordConfirm :: Text
     }
-  deriving (Show)
+  deriving stock (Show)
 
 makeFieldLabelsWith noPrefixFieldLabels ''NewUserInfo
 
@@ -189,7 +181,7 @@ theMap = attrMap V.defAttr
   ]
 
 drawError :: String -> AppState e -> [Widget Name]
-drawError err previousApp =
+drawError err _previousApp =
     [C.hCenter . C.vCenter . B.border . hLimit 80 . C.hCenter $ str err]
 
 userInfoAttr :: A.AttrName
@@ -210,12 +202,6 @@ draw AppState{..} = draw' stage
       where
         label :: Widget Name
         label = str " Users "
-        cur :: Widget Name
-        cur = case userList ^. lensVL L.listSelectedL of
-                Nothing -> str "-"
-                Just i -> str (show (i + 1))
-        total :: Widget Name
-        total = str . show . length $ userList ^. lensVL L.listElementsL
         box :: Widget Name
         box = B.borderWithLabel label $
               L.renderList listDrawElement True userList
@@ -253,6 +239,7 @@ handleEvents s@AppState{..} = handleEvents' stage
         VtyEvent e -> do
             userList' <- L.handleListEvent e userList
             M.continue $ s { userList = userList' }
+        _ -> continue s
     handleEvents' (AddingNewUser form) = \case
         VtyEvent V.EvResize {} -> continue s
         VtyEvent (V.EvKey V.KEsc []) -> do
@@ -324,14 +311,14 @@ toUserInfo Core.User{..} = UserInfo {..}
 
 toNewUserInfo :: MonadIO m => NewUserInfo -> m Core.NewUser
 toNewUserInfo NewUserInfo{..} = do
-    password <- liftIO $ hashPassword (encodeUtf8 password) defaultOptions 32
+    hashedPassword <- liftIO $ hashPassword (encodeUtf8 password) defaultOptions 32
         >>= throwCryptoErrorIO
-    pure Core.NewUser {..}
+    pure Core.NewUser {password = hashedPassword, ..}
 
 main :: IO ()
 main = do
     databaseChan <- createDataModelChannel
-    forkIO $ runDataModel databaseChan
+    _ <- forkIO $ runDataModel databaseChan
     userList <- runM . runDataModelEffect databaseChan $ listUsers
 
     let f = AppState databaseChan UserList

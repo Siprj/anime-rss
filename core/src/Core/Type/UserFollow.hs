@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DerivingStrategies #-}
 
 module Core.Type.UserFollow
     ( UserFollow(..)
@@ -24,6 +25,6 @@ data UserFollow = UserFollow
     , animeId :: AnimeId
     , follow :: Bool
     }
-  deriving (Show)
+  deriving stock (Show)
 
 makeFieldLabelsWith noPrefixFieldLabels ''UserFollow

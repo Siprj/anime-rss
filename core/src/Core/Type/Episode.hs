@@ -7,40 +7,26 @@
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DerivingStrategies #-}
 
-module Core.Type.Anime
-    ( Anime(..)
-    , UserRelatedAnime(..)
+module Core.Type.Episode
+    ( Episode(..)
     )
   where
 
-import Core.Type.Id (AnimeId)
-import Data.Bool (Bool)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Network.URI (URI)
 import Optics (makeFieldLabelsWith, noPrefixFieldLabels)
 import Text.Show (Show)
 
-
-data Anime = Anime
-    { animeId :: AnimeId
-    , title :: Text
+data Episode = Episode
+    { title :: Text
     , url :: URI
     , imageUrl :: URI
     , date :: UTCTime
+    , number :: Text
     }
-  deriving (Show)
+  deriving stock (Show)
 
-data UserRelatedAnime = UserRelatedAnime
-    { animeId :: AnimeId
-    , title :: Text
-    , url :: URI
-    , imageUrl :: URI
-    , date :: UTCTime
-    , following :: Bool
-    }
-  deriving (Show)
-
-makeFieldLabelsWith noPrefixFieldLabels ''Anime
-makeFieldLabelsWith noPrefixFieldLabels ''UserRelatedAnime
+makeFieldLabelsWith noPrefixFieldLabels ''Episode

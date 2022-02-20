@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DerivingStrategies #-}
 
 module Core.Type.User
     ( User(..)
@@ -33,14 +34,14 @@ data User = User
     , password :: PasswordHash
     , episodeChannel :: UUID
     }
-  deriving (Show)
+  deriving stock (Show)
 
 data NewUser = NewUser
     { email :: Email
     , name :: Text
     , password :: PasswordHash
     }
-  deriving (Show)
+  deriving stock (Show)
 
 makeFieldLabelsWith noPrefixFieldLabels ''User
 makeFieldLabelsWith noPrefixFieldLabels ''NewUser

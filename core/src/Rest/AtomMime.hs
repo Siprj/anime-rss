@@ -1,11 +1,9 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DerivingStrategies #-}
 
 module Rest.AtomMime
     (AtomFeed)
@@ -46,7 +44,7 @@ instance Accept AtomFeed where
     contentType _ = "application" // "atom+xml"
 
 newtype FeedRendererException = FeedRendererException (Set Text)
-    deriving Show
+    deriving stock Show
 
 instance Exception FeedRendererException
 

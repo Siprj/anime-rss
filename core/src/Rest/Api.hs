@@ -14,6 +14,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DerivingStrategies #-}
 
 module Rest.Api
     ( Api
@@ -48,7 +49,7 @@ import Servant.Auth.Server (SetCookie, Auth, Cookie, ToJWT, FromJWT)
 newtype LoggedInUser = LoggedInUser
     { userId :: UserId
     }
-  deriving (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic)
 
 instance ToJSON LoggedInUser
 instance ToJWT LoggedInUser
@@ -64,7 +65,7 @@ data User = User
     , name :: Text
     , episodeChannel :: UUID
     }
-  deriving (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic)
 
 makeFieldLabelsWith noPrefixFieldLabels ''User
 instance ToJSON User where
@@ -75,7 +76,7 @@ data Login = Login
     { email :: Email
     , password :: Text
     }
-  deriving (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic)
 
 makeFieldLabelsWith noPrefixFieldLabels ''Login
 instance ToJSON Login where
@@ -90,7 +91,7 @@ data Anime = Anime
     , date :: UTCTime
     , following :: Bool
     }
-  deriving (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic)
 
 makeFieldLabelsWith noPrefixFieldLabels ''Anime
 instance ToJSON Anime where
@@ -101,7 +102,7 @@ data PostAnimeFollow = PostAnimeFollow
     { animeId :: AnimeId
     , follow :: Bool
     }
-  deriving (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic)
 
 makeFieldLabelsWith noPrefixFieldLabels ''PostAnimeFollow
 instance ToJSON PostAnimeFollow where

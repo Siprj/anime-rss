@@ -11,21 +11,18 @@ module Main
   where
 
 import Control.Concurrent (forkIO)
-import Control.Monad ((>>=))
-import Control.Monad.Freer.Internal (Eff(E, Val))
+import Control.Monad.Freer.Internal (Eff)
 import Control.Monad.Freer.Reader (runReader)
-import Control.Monad.Freer (runM, send, runNat)
+import Control.Monad.Freer (runM, runNat)
 import Control.Monad.IO.Class (liftIO)
 import Data.Function (($), (.))
 import Data.Proxy (Proxy(Proxy))
 import Network.URI (URI)
-import Network.Wai (Application)
 import Network.Wai.Handler.Warp (run)
-import Rest.Server (Context(Context, baseUri), apiHander)
+import Rest.Server (Context(Context), apiHander)
 import Rest.Api (Api)
-import Servant.Server (Handler, serve, hoistServer, Context ((:.), EmptyContext), serveWithContext, HasServer (hoistServerWithContext))
-import qualified Servant.Server as Servant (Context)
-import System.IO (IO, print)
+import Servant.Server (Handler, Context ((:.), EmptyContext), serveWithContext, HasServer (hoistServerWithContext))
+import System.IO (IO)
 
 import Control.Monad.Freer.Service (ServiceChannel)
 import DataModel.Service
@@ -45,9 +42,9 @@ baseUrl = $$(staticURI "https://gogoanime.io/")
 main :: IO ()
 main = do
     databaseChan <- createDataModelChannel
-    forkIO $ runDataModel databaseChan
+    _ <- forkIO $ runDataModel databaseChan
 
-    forkIO $ runScraper' databaseChan
+    _ <- forkIO $ runScraper' databaseChan
     restApp databaseChan
   where
 
@@ -57,12 +54,12 @@ main = do
         let cookiesSettings = defaultCookieSettings { cookieIsSecure = NotSecure }
             jwtCfg = defaultJWTSettings myKey
             cfg = cookiesSettings :. jwtCfg :. EmptyContext
-            nat databaseChan eff =
+            nat eff =
                 runM . intLiftIO . runDataModelEffect databaseChan
                 $ runReader eff (Context baseUrl cookiesSettings jwtCfg )
 
         run 8082 .  serveWithContext restAPI cfg $
-                hoistServerWithContext restAPI (Proxy :: Proxy '[CookieSettings, JWTSettings]) (nat databaseChan) apiHander
+                hoistServerWithContext restAPI (Proxy :: Proxy '[CookieSettings, JWTSettings]) nat apiHander
 
     restAPI :: Proxy Api
     restAPI = Proxy

@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -9,15 +8,17 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DerivingStrategies #-}
 
 module Crypto.PasswordStore
---    (..
---    )
+    ( HashParameters
+    , PasswordHash
+    , defaultOptions
+    , hashPassword
+    , verifyPassword
+    )
   where
 
 import GHC.Generics(Generic)
@@ -33,17 +34,15 @@ import Crypto.Random (getRandomBytes)
 import Data.Bits (shiftL)
 import Data.Bool (Bool)
 import Data.ByteString (ByteString)
-import Data.Eq ((==))
-import Data.Eq (Eq)
+import Data.Eq ((==), Eq)
 import Data.Function (($))
 import Data.Functor ((<$>))
 import Data.Int (Int)
 import Data.Serialize (getWord8, putWord8, Serialize(put, get), Put, Get)
 import System.IO (IO)
-import Text.Show (Show)
+import Text.Show ( Show, Show(show) )
 import Data.Serialize.Put ()
 import Prelude (error)
-import Text.Show (Show(show))
 import Data.Semigroup (Semigroup((<>)))
 
 
@@ -52,7 +51,7 @@ data HashParameters = HashParameters
     , hashParametersOutputHashSize :: Int
     , hashParametersSalt :: ByteString
     }
-  deriving (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic)
 
 putVariant :: Crypto.Variant -> Put
 putVariant v = putWord8 $ case v of
@@ -98,8 +97,7 @@ instance Serialize HashParameters where
         variant <- getVariant
         version <- getVersion
         hashSize <- get
-        salt <- get
-        pure $ HashParameters Crypto.Options{..} hashSize salt
+        HashParameters Crypto.Options{..} hashSize <$> get
 
 type PasswordHash = (HashParameters, ByteString)
 
@@ -137,5 +135,5 @@ verifyPassword
     -- ^ password
     -> PasswordHash
     -> CryptoFailable Bool
-verifyPassword password (HashParameters options hashSize salt, passwordHash) = do
+verifyPassword password (HashParameters options hashSize salt, passwordHash) =
     (passwordHash ==) <$> Crypto.hash options password salt hashSize
