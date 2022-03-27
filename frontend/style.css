@@ -574,14 +574,10 @@ navbar9 .left-submenu .selected {
 }
 
 
-
-
-
-
-
 navbar10 {
-  --bg-color: #1d1919;
-  --text-color: #929d62;
+  --bg-color: #1f222a;
+  --text-color: #48fb35;
+  --hover-text-color: hsl(114, 96%, 95%);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -596,11 +592,6 @@ navbar10 ul {
   justify-content: space-between;
 }
 
-navbar10 .right-submenu,
-navbar10 .left-submenu {
-  display: flex;
-}
-
 navbar10 .left-submenu {
   width: 100%;
 }
@@ -611,12 +602,10 @@ navbar10 .left-submenu li {
   list-style-type: none;
   padding: 0.2em 0.4em;
   margin: 0 0.2em;
-/*      border-right: 1px solid white; */
   color: var(--text-color);
   font-weight: bold;
   font-size: 1.2em;
   white-space: nowrap;
-  border: 0.15em solid;
 }
 
 navbar10 .right-submenu li:last-child {
@@ -627,20 +616,70 @@ navbar10 .left-submenu li:fst-child {
   margin-left: 0;
 }
 
-navbar10 .left-submenu::after {
-  content: "";
-  background: repeating-linear-gradient(
-    90deg,
-    var(--text-color),
-    var(--text-color) 2px,
-    transparent 0,
-    transparent 10px);
-  width: 100%;
-  display: inline;
-}
-
 navbar10 .left-submenu .selected {
   color: var(--bg-color);
   background-color: var(--text-color);
-  border-color: var(--text-color);
+  border: 0;
+}
+
+navbar10 .left-submenu li:hover:not(.selected),
+navbar10 .right-submenu li:hover:not(.selected) {
+  color: var(--hover-text-color);
+}
+
+
+
+
+
+navbar11 {
+  --bg-color: #1f222a;
+  --text-color: #74c76b;
+  --hover-text-color: hsl(114, 96%, 95%);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+  background-color: var(--bg-color);
+}
+
+navbar11 ul {
+  padding: 0;
+  justify-content: space-between;
+}
+
+navbar11 .left-submenu {
+  width: 100%;
+}
+
+navbar11 .right-submenu li,
+navbar11 .left-submenu li {
+  display: inline-block;
+  list-style-type: none;
+  padding: 0.2em 0.4em;
+  margin: 0 0.2em;
+  color: var(--text-color);
+  font-weight: bold;
+  font-size: 1.2em;
+  white-space: nowrap;
+}
+
+navbar11 .right-submenu li:last-child {
+  margin-right: 0;
+}
+
+navbar11 .left-submenu li:fst-child {
+  margin-left: 0;
+}
+
+navbar11 .left-submenu .selected {
+  color: var(--bg-color);
+  background-color: var(--text-color);
+  border: 0;
+}
+
+navbar11 .left-submenu li:hover:not(.selected),
+navbar11 .right-submenu li:hover:not(.selected) {
+  color: var(--hover-text-color);
 }
