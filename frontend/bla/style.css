@@ -5,6 +5,7 @@
   --hover-text-color: hsl(114, 96%, 95%);
   --page-max-width: 900px;
   --navbar-height: 3em;
+  --list-general-margine: 0.5em;
 }
 
 body {
@@ -90,7 +91,6 @@ nav li:hover a {
   text-decoration: none;
 }
 
-
 .content-wrapper {
   color: var(--text-color);
   position: absolute;
@@ -103,6 +103,7 @@ nav li:hover a {
 }
 
 .content {
+  padding-top: 0.5em;
   width: 100%;
   max-width: var(--page-max-width);
 }
@@ -146,14 +147,69 @@ img {
   height: 100%;
 }
 
-.list-row {
+.list-content {
+  margin-top: var(--list-general-margine);
+  display: block;
+}
+
+.anime-list-row {
   height: 10em;
   border: 0.15em;
-  margin-top: 0.5em;
-  border-style: solid;
+  border-style: solid solid none solid;
 #  border-radius: 1em;
   border-color: var(--text-secondary-color);
-  padding: 0.5em;
+  padding: var(--list-general-margine);
   display: flex;
   align-items: center;
+}
+
+.anime-list-row:first-child {
+  margin-top: 0.5em;
+}
+
+.anime-list-row:last-child {
+  border-bottom-style: solid;
+}
+
+.anime-list-row img {
+  margin-right: var(--list-general-margine);
+}
+
+.anime-list-row div {
+  display: flex;
+  align-items: left;
+  flex-direction: column;
+}
+
+input.skewed-subscribe-checkbox {
+  display: none;
+}
+
+label.skewed-subscribe-checkbox {
+  cursor: pointer;
+}
+
+label.skewed-subscribe-checkbox div{
+  display: inline-block;
+  height: 1.3em;
+  font-weight: bold;
+  color: #fff;
+  padding: 0.3em;
+  overflow: hidden;
+  transform: skew(-10deg);
+  transition: all 0.4s ease;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+input.skewed-subscribe-checkbox+label  div{
+  background: #02C66F;
+}
+
+input.skewed-subscribe-checkbox:checked+label div{
+  background: #FF3A19;
+}
+
+.anime-list-row .title {
+  font-weight: bold;
+  padding-bottom: var(--list-general-margine);
 }
