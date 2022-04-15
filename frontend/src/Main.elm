@@ -16,6 +16,7 @@ import Url exposing (Url)
 import Url.Parser exposing (Parser, top, string, (</>), oneOf, parse)
 import Browser.Navigation as Nav
 import Http
+import Page.AnimeList
 import Json.Decode as D
 
 
@@ -38,12 +39,13 @@ updateWithStorage msg model = case msg of
         Err err -> case err of
             Http.BadStatus v -> case v of
                 401 ->
-                    Debug.log (String.append "GotAnimeList:Http.BadStatus" (String.fromInt v)) ({model | page = LoginPage}, Cmd.none)
-            _ -> Debug.log "GotAnimeList:_" (model, Cmd.none)
-        Ok _ -> Debug.log "GotAnimeList" (model, Cmd.none)
-    Logout ->  Debug.log "GotAnimeList" (model, Cmd.none)
-    LogIn -> Debug.log "GotAnimeList" (model, Cmd.none)
-    NoOp -> Debug.log "GotAnimeList" (model, Cmd.none)
+                    Debug.log (String.append "GotAnimeList6:Http.BadStatus " (String.fromInt v)) ({model | page = LoginPage}, Cmd.none)
+                _ -> Debug.log "GotAnimeList0" (model, Cmd.none)
+            _ -> Debug.log "GotAnimeList1" (model, Cmd.none)
+        Ok _ -> Debug.log "GotAnimeList2" (model, Cmd.none)
+    Logout ->  Debug.log "GotAnimeList3" (model, Cmd.none)
+    LogIn -> Debug.log "GotAnimeList4" (model, Cmd.none)
+    NoOp -> Debug.log "GotAnimeList5" (model, Cmd.none)
 
 type SubscriptionAction = Subscribe | Unsubscribe
 
@@ -172,10 +174,6 @@ type Page =
     | LoginPage
     | AnimeListPage
 
-type alias LoginInfo =
-    { xtoken : String
-    }
-
 emptyModel : Model
 emptyModel =
     { loginInfo = Nothing
@@ -186,7 +184,7 @@ emptyModel =
 init : Value -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ _ _=
   ( emptyModel
-  , fetchAnimeListCmd
+  , Cmd.none --fetchAnimeListCmd
   )
 
 
