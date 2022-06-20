@@ -1,121 +1,33 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DerivingStrategies #-}
-
 module Main
     (main)
   where
 
-import Data.Functor (fmap)
-import Data.String (String)
+import Relude hiding (on, id)
 import Crypto.Error (throwCryptoErrorIO)
-import Control.Applicative ((<|>), pure)
-import Control.Concurrent (forkIO)
-import Control.Monad (void, (>>=))
-import Control.Monad.Freer (runM)
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.Function (($), (.), const)
-import Data.List (unlines)
-import Data.Text.Encoding (encodeUtf8)
-import Data.Semigroup ((<>))
-import Data.Monoid (mempty)
-import Data.Bool (Bool(True), (&&), not)
-import Text.Show (Show, show)
-import Data.Text (Text)
-import Data.Maybe (Maybe(Just, Nothing))
-import System.IO (IO)
-import Data.Eq (Eq, (==), (/=))
-import Data.Ord (Ord)
-import Optics ((^.), makeFieldLabelsWith, noPrefixFieldLabels, toLensVL)
+import Optics ((^.), toLensVL)
 import qualified Graphics.Vty as V
 import qualified Brick.Main as M
 import Brick.Widgets.Core
-  ( (<+>)
-  , hLimit
-  , vLimit
-  , str
-  )
 import qualified Brick.Widgets.Edit as E
 import qualified Brick.AttrMap as A
-import Brick.Util (on)
+import Effectful (runEff)
+import qualified Database.PostgreSQL.Simple as SQL
 import Brick
-    ( App(App)
-    , AttrMap
-    , BrickEvent(VtyEvent)
-    , CursorLocation
-    , EventM
-    , Next
-    , Padding(Pad)
-    , Widget
-    , attrMap
-    , continue
-    , defaultMain
-    , fg
-    , fill
-    , halt
-
-    , padBottom
-    , padTop
-    , vBox
-    , withAttr
-    )
 import Brick.Forms
-  ( Form
-  , newForm
-  , formState
-  , formFocus
-  , setFieldValid
-  , renderForm
-  , handleFormEvent
-
-
-  , focusedFormInputAttr
-  , invalidFormInputAttr
-
-
-
-  , editTextField
-  , editPasswordField
-  , (@@=)
-  )
 import Brick.Focus
-  ( focusRingCursor
-  )
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as C
 import qualified Brick.Widgets.List as L
-
-import qualified Core.Type.User as Core
-    ( NewUser(NewUser, name, email, password)
-    , User(User, userId, name, email, password, episodeChannel)
-    )
-import Core.Type.Id (UserId)
-import Control.Monad.Freer.Service (ServiceChannel)
-import DataModel.Service
-    ( DataModel
-    , addUser
-    , createDataModelChannel
-    , deleteUser
-    , listUsers
-    , runDataModel
-    , runDataModelEffect)
-import Data.Foldable (Foldable(length))
-import Data.Vector (Vector, fromList)
+import AnimeRss.Ids (UserId)
+import AnimeRss.DataModel.Queries
 import Crypto.PasswordStore (hashPassword, defaultOptions)
-
+import AnimeRss.DataModel.Types
+import DBE
+import Options
+import Data.Vector (Vector)
+import Options.Applicative hiding (str)
+import Data.ByteString.Char8 hiding (length, unlines)
+import AnimeRss.DataModel.Migrations
 
 data Name
     = NameField
@@ -127,13 +39,11 @@ data Name
   deriving stock (Eq, Ord, Show)
 
 data UserInfo = UserInfo
-    { userId :: UserId
+    { id :: UserId
     , name :: Text
     , email :: Text
     }
-  deriving stock (Show)
-
-makeFieldLabelsWith noPrefixFieldLabels ''UserInfo
+  deriving stock (Show, Generic)
 
 data NewUserInfo = NewUserInfo
     { name :: Text
@@ -141,17 +51,15 @@ data NewUserInfo = NewUserInfo
     , password  :: Text
     , passwordConfirm :: Text
     }
-  deriving stock (Show)
-
-makeFieldLabelsWith noPrefixFieldLabels ''NewUserInfo
+  deriving stock (Show, Generic)
 
 data AppStage e
     = UserList
     | AddingNewUser (Form NewUserInfo e Name)
-    | Error String (AppState e)
+    | Error Text (AppState e)
 
 data AppState e = AppState
-    { dbChannel :: ServiceChannel DataModel
+    { dbConnection :: SQL.Connection
     , stage :: AppStage e
     , userList :: L.GenericList Name Vector UserInfo
     }
@@ -180,9 +88,9 @@ theMap = attrMap V.defAttr
   , (userInfoAttr, fg V.cyan)
   ]
 
-drawError :: String -> AppState e -> [Widget Name]
+drawError :: Text -> AppState e -> [Widget Name]
 drawError err _previousApp =
-    [C.hCenter . C.vCenter . B.border . hLimit 80 . C.hCenter $ str err]
+    [C.hCenter . C.vCenter . B.border . hLimit 80 . C.hCenter $ txt err]
 
 userInfoAttr :: A.AttrName
 userInfoAttr = L.listSelectedAttr <> "userInfo"
@@ -234,7 +142,7 @@ handleEvents s@AppState{..} = handleEvents' stage
             case L.listSelectedElement userList of
                 Nothing -> M.continue s
                 Just (i, UserInfo{..}) -> do
-                    void . liftIO . runM . runDataModelEffect dbChannel $ deleteUser userId
+                    void . liftIO . runEff . runDBESingle dbConnection $ deleteDbUser id
                     M.continue $ s {userList = L.listRemove i userList }
         VtyEvent e -> do
             userList' <- L.handleListEvent e userList
@@ -253,8 +161,8 @@ handleEvents s@AppState{..} = handleEvents' stage
 
             if nameCheck && emailCheck && passwordEmpty && passwordCheck
                 then do
-                    newUser' <- toNewUserInfo newUser
-                    maybeUser <- liftIO . runM . runDataModelEffect dbChannel $ addUser newUser'
+                    newUser' <- toCreateUser newUser
+                    maybeUser <- liftIO . runEff . runDBESingle dbConnection $ insertDbUser newUser'
                     case maybeUser of
                         Nothing ->
                             continue s { stage = Error "User with given email already exists." s }
@@ -283,7 +191,7 @@ handleEvents s@AppState{..} = handleEvents' stage
 when' :: Bool -> a -> [a]
 when' v m = if v then pure m else mempty
 
-toError :: Bool -> Bool -> Bool -> Bool -> String
+toError :: Bool -> Bool -> Bool -> Bool -> Text
 toError nameCheck emailCheck passwordEmpty passwordCheck = unlines $
     when' (not nameCheck) "Name can't be empty."
     <|> when' (not emailCheck) "Email can't be empty."
@@ -306,22 +214,23 @@ app = App
     , appAttrMap = const theMap
     }
 
-toUserInfo :: Core.User -> UserInfo
-toUserInfo Core.User{..} = UserInfo {..}
+toUserInfo :: GetUser -> UserInfo
+toUserInfo GetUser{..} = UserInfo {..}
 
-toNewUserInfo :: MonadIO m => NewUserInfo -> m Core.NewUser
-toNewUserInfo NewUserInfo{..} = do
-    hashedPassword <- liftIO $ hashPassword (encodeUtf8 password) defaultOptions 32
+toCreateUser :: MonadIO m => NewUserInfo -> m CreateUser
+toCreateUser NewUserInfo{..} = do
+    (hashParameters, passwordByteString) <- liftIO $ hashPassword (encodeUtf8 password) defaultOptions 32
         >>= throwCryptoErrorIO
-    pure Core.NewUser {password = hashedPassword, ..}
+    pure CreateUser {password = DbPasswordHash passwordByteString hashParameters, ..}
 
 main :: IO ()
 main = do
-    databaseChan <- createDataModelChannel
-    _ <- forkIO $ runDataModel databaseChan
-    userList <- runM . runDataModelEffect databaseChan $ listUsers
+    Configuration{..} <- execParser options
+    dbConnection <- SQL.connectPostgreSQL (pack databaseConnectionString)
+    migrateAll dbConnection
+    userList <- runEff . runDBESingle dbConnection $ listDbUsers
 
-    let f = AppState databaseChan UserList
+    let f = AppState dbConnection UserList
             $ L.list UserListWidget (fromList $ fmap toUserInfo userList) 1
 
     void $ defaultMain app f

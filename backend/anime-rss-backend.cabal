@@ -1,5 +1,5 @@
 cabal-version:  3.6
-name:           anime-rss-admin-tui
+name:           anime-rss-backend
 version:        0.1.0.0
 synopsis:       Rss feed generator for gogoanime.io
 description:    Please see the README on Github at  <https://github.com/Siprj/anime-rss#readme>
@@ -8,13 +8,11 @@ homepage:       https://github.com/Siprj/gogoanime-rss#readme
 bug-reports:    https://github.com/Siprj/gogoanime-rss/issues
 author:         Jan Sipr
 maintainer:     sipr.jan@gmail.com
-copyright:      2018 Jan Sipr
+copyright:      2022 Jan Sipr
 license:        BSD-3-Clause
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
-    README.md
-    ChangeLog.md
 
 source-repository head
   type: git
@@ -28,78 +26,54 @@ flag pedantic
 common common-stanza
     default-language: GHC2021
     default-extensions:
-      DataKinds
-      DerivingStrategies
-      DuplicateRecordFields
-      LambdaCase
       NoImplicitPrelude
-      OverloadedLabels
+      DataKinds
+      TypeOperators
+      DerivingStrategies
       OverloadedStrings
       RecordWildCards
+      DuplicateRecordFields
 
-executable admin-tui
+library
   import: common-stanza
 
-  main-is: Main.hs
+  exposed-modules:
+      AnimeRss.DataModel.Migrations
+      AnimeRss.DataModel.Queries
+      AnimeRss.DataModel.Types
+      AnimeRss.Ids
+      AnimeRss.Url
+      DBE
+      Lib
+      Crypto.PasswordStore
   hs-source-dirs:
       src
-  other-modules:
-      Options
+  if flag(pedantic)
+    ghc-options: -Werror
+
   ghc-options:
       -Wall
       -Wmissing-export-lists
       -Wredundant-constraints
       -Wmissing-deriving-strategies
-      -threaded
-      -rtsopts -with-rtsopts=-N
+
   build-depends:
-      HandsomeSoup
-    , anime-rss-backend
-    , attoparsec
-    , base >=4.7 && <5
-    , brick
-    , bytestring
-    , cereal
-    , conduit
-    , containers
-    , cryptonite
-    , data-default
-    , feed
-    , freer-effects
-    , haskell-src-exts
-    , haskell-src-meta
-    , relude
-    , http-media
-    , http-api-data
-    , hxt
-    , hxt-css
-    , megaparsec
-    , monad-logger
-    , mtl
-    , network-uri
-    , optics
-    , optparse-applicative
-    , parser-combinators
-    , postgresql-simple
-    , pretty-simple
-    , safecopy
-    , servant
-    , exceptions
-    , servant-auth
-    , servant-auth-server
-    , servant-server
-    , split
-    , stm
-    , template-haskell
-    , text
-    , time
-    , transformers
-    , uuid
-    , vector
-    , vty
-    , wreq
-    , xml
-    , xml-conduit
+      base >=4.7 && <5
     , effectful-core
-  if flag(pedantic)
-    ghc-options: -Werror
+    , effectful
+    , exceptions
+    , optics
+    , aeson
+    , relude
+    , uuid
+    , network-uri
+    , time
+    , bytestring
+    , postgresql-simple
+    , resource-pool
+    , drifter-postgresql
+    , drifter
+    , pretty-simple
+    , text
+    , cryptonite
+    , cereal
