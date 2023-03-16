@@ -5,7 +5,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedLabels #-}
 
-module Scraper.Parser.Gogoanime
+module AnimeRss.Scraper.Parser.Gogoanime
     ( getEntrisFromFronPage
     , gogoanimeUrl
     )
@@ -39,26 +39,26 @@ import Text.XML.HXT.Core
     )
 
 import Network.URI.Static (staticURI)
-import Core.Type.EpisodeEntry
-    (animeUrl, EpisodeEntry(EpisodeEntry, imageUrl, title, url, number))
 import Data.List (break, reverse, stripPrefix, null)
 import Data.Eq ((==))
 import Data.Either.Combinators (maybeToRight)
 import Control.Monad (when)
+import AnimeRss.DataModel.Types (CreateEpisode(..))
+import AnimeRss.Url
 
 
 gogoanimeUrl :: URI
-gogoanimeUrl = $$(staticURI "https://gogoanime.io/")
+gogoanimeUrl = $$(staticURI "https://gogoanime.gr/")
 
 -- TODO: Save how many episodes was parsed and try use this information to
 -- determine that parser failed.
-getEntrisFromFronPage :: URI -> IO [EpisodeEntry]
+getEntrisFromFronPage :: URI -> IO [CreateEpisode]
 getEntrisFromFronPage url = do
     data' <- get (show url) <&> (unpack . view (lensVL responseBody))
     runX $ parseHtml data' >>> css ".items" >>> css ".img"
         >>> deep (hasName "a" >>> parseEntry)
   where
-    parseEntry :: (ArrowXml a, ArrowChoice a) => a XmlTree EpisodeEntry
+    parseEntry :: (ArrowXml a, ArrowChoice a) => a XmlTree CreateEpisode
     parseEntry = proc x -> do
         linkStr <- getAttrValue "href" -< x
         link <- arr parseRelativeReference >>> isA isJust >>> arr fromJust -< linkStr
@@ -67,12 +67,12 @@ getEntrisFromFronPage url = do
         imageUrl <- getChildren >>> hasName "img" >>> getAttrValue "src"
             >>> arr parseURI >>> isA isJust >>> arr fromJust -< x
         animeUrl <- arr parseRelativeReference >>> isA isJust >>> arr fromJust -< animeUrlStrin
-        returnA -< EpisodeEntry
-            { url = link `relativeTo` url
+        returnA -< CreateEpisode
+            { url = Url $ link `relativeTo` url
             , title
-            , imageUrl
+            , imageUrl = Url imageUrl
             , number = pack number
-            , animeUrl = animeUrl `relativeTo` url
+            , animeUrl = Url $ animeUrl `relativeTo` url
             }
 
 episodeNumberAndLinkParser :: String -> Either String (String, String)

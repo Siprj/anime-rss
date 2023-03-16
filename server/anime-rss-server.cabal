@@ -40,10 +40,10 @@ executable anime-rss
       -Wmissing-export-lists
       -Wredundant-constraints
       -Wmissing-deriving-strategies
-  ghc-options: 
+  ghc-options:
   build-depends:
       HandsomeSoup
-    , anime-rss-core
+    , anime-rss-backend
     , attoparsec
     , base >=4.7 && <5
     , text
@@ -53,6 +53,7 @@ executable anime-rss
     , servant-server
     , servant-auth
     , servant-auth-server
-    , freer-effects
+    , effectful-core
+    , resource-pool
   default-language: Haskell2010
 

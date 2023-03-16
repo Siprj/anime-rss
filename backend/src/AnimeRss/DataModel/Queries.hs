@@ -5,6 +5,8 @@ module AnimeRss.DataModel.Queries
   , getDbUserById
   , listDbUsers
   , deleteDbUser
+  , insertEpisode
+  , listAnimes
   )
 where
 
@@ -16,6 +18,7 @@ import qualified Database.PostgreSQL.Simple as SQL
 import Database.PostgreSQL.Simple.SqlQQ (sql)
 import Effectful
 import Relude hiding (head, id)
+import Data.List
 -- import Relude.Unsafe (head)
 --
 -- expecOneResult :: Text -> [a] -> Eff es a
@@ -41,7 +44,15 @@ expectOneAction origin count = do
     then pure ()
     else throwM err
 
-insertDbUser :: ([PostgreSql, IOE] :>> es) => CreateUser -> Eff es (Maybe GetUser)
+expectOneResult :: Text -> [a] -> Eff es a
+expectOneResult origin values = do
+  let len = length values
+  let err = unexpectedAmountOfResults origin 1 1 len
+  if len == 1
+    then pure $ head values
+    else throwM err
+
+insertDbUser :: (PostgreSql :> es) => CreateUser -> Eff es (Maybe User)
 insertDbUser CreateUser {..} = do
   ret <-
     returning
@@ -61,7 +72,7 @@ insertDbUser CreateUser {..} = do
       [(name, email, password)]
   expecOneOrZeroResults "createDbUser" ret
 
-getDbUserById :: ([PostgreSql, IOE] :>> es) => UserId -> Eff es (Maybe GetUser)
+getDbUserById :: (PostgreSql :> es) => UserId -> Eff es (Maybe User)
 getDbUserById userId = do
   ret <-
     query
@@ -77,7 +88,7 @@ getDbUserById userId = do
       (SQL.Only userId)
   expecOneOrZeroResults "getDbUser" ret
 
-listDbUsers :: ([PostgreSql, IOE] :>> es) => Eff es [GetUser]
+listDbUsers :: (PostgreSql :> es) => Eff es [User]
 listDbUsers = do
   query_
     [sql| SELECT
@@ -89,10 +100,57 @@ listDbUsers = do
     FROM users
     |]
 
-deleteDbUser :: ([PostgreSql, IOE] :>> es) => UserId -> Eff es ()
+deleteDbUser :: (PostgreSql :> es) => UserId -> Eff es ()
 deleteDbUser userId = do
   ret <- execute
     [sql| DELETE FROM users WHERE id = ?
     |]
     (SQL.Only userId)
   expectOneAction "deleteDBUsers" ret
+
+insertEpisode :: (PostgreSql :> es, IOE :> es) => CreateEpisode -> Eff es ()
+insertEpisode CreateEpisode{..} = do
+  -- TODO: Add logging
+  liftIO $ putStrLn "inserting anime"
+  ret <-
+    returning
+      [sql| INSERT INTO animes (
+        title,
+        image_url,
+        url
+    )
+    VALUES (?,?,?)
+    ON CONFLICT (title) DO UPDATE SET title = excluded.title
+    RETURNING
+        id
+    |]
+      [(title, imageUrl, animeUrl)]
+  animeId <- SQL.fromOnly @AnimeId <$> expectOneResult "insertAnime" ret
+  liftIO $ putStrLn "inserting episode"
+  ret2 <-
+    execute
+      [sql| INSERT INTO episodes (
+        url,
+        number,
+        anime_id
+    )
+    VALUES (?,?,?)
+    ON CONFLICT (url) DO UPDATE SET url = excluded.url
+    |]
+      (url, number, animeId)
+  expectOneAction "insertAnime" ret2
+
+listAnimes :: (PostgreSql :> es, IOE :> es) => Eff es [Anime]
+listAnimes = do
+  -- TODO: Add logging
+  liftIO $ putStrLn "listAnimes"
+  query_
+      [sql| SELECT
+        id,
+        title,
+        image_url,
+        url,
+        date
+    FROM animes
+    ORDER by date DESC
+    |]

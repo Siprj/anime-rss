@@ -44,8 +44,14 @@ library
       AnimeRss.Ids
       AnimeRss.Url
       DBE
-      Lib
+      DBE.Static
       Crypto.PasswordStore
+      AnimeRss.Scraper.Service
+      AnimeRss.Scraper.Parser.Gogoanime
+      AnimeRss.Rest.Api
+      AnimeRss.Rest.AtomMime
+      AnimeRss.Rest.Authentication
+      AnimeRss.Rest.Server
   hs-source-dirs:
       src
   if flag(pedantic)
@@ -77,3 +83,14 @@ library
     , text
     , cryptonite
     , cereal
+    , hxt
+    , wreq
+    , HandsomeSoup
+    , either
+    , servant
+    , servant-server
+    , servant-auth-server
+    , feed
+    , data-default
+    , http-media
+    , xml-conduit

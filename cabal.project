@@ -1,13 +1,4 @@
-packages: admin-tui core server backend
+packages: admin-tui server backend
 
-source-repository-package
-    type: git
-    location: https://github.com/arybczak/effectful
-    tag: ba4798f1eb540d9b4d13a3463f79ce0633cbb656
-    subdir: effectful-core
-
-source-repository-package
-    type: git
-    location: https://github.com/arybczak/effectful
-    tag: ba4798f1eb540d9b4d13a3463f79ce0633cbb656
-    subdir: effectful
+allow-newer:
+  , servant-auth:lens

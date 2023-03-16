@@ -1,6 +1,6 @@
 # Ubuntu 20.04 LTS (Focal Fossa), supported until April 2025.
 ARG UBUNTU_VERSION=20.04
-ARG GHC_VERSION=9.2.2
+ARG GHC_VERSION=9.4.4
 ARG CABAL_VERSION=3.6.2.0
 # Given that BuildKit can build multiple stages at the same time, it might be a good idea
 # to keep the number of jobs quite low depending on the number of stages that can

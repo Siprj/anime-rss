@@ -1,33 +1,102 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use null" #-}
 module Main
     (main)
   where
 
-import Relude hiding (on, id)
+import Relude
+    ( ($),
+      IsList(fromList),
+      Eq(..),
+      Monad((>>=)),
+      Functor(fmap),
+      Ord,
+      Show,
+      Applicative(pure),
+      Foldable(length),
+      Generic,
+      Semigroup((<>)),
+      Monoid(mempty),
+      Bool(True),
+      Maybe(..),
+      IO,
+      void,
+      (.),
+      const,
+      (&&),
+      not,
+      Alternative((<|>)),
+      gets,
+      modify,
+      show,
+      unlines,
+      MonadIO(..),
+      MonadState(get, put),
+      ConvertUtf8(encodeUtf8),
+      Text )
 import Crypto.Error (throwCryptoErrorIO)
-import Optics ((^.), toLensVL)
+import Optics ((^.), toLensVL, use, (%), preview, (.~))
 import qualified Graphics.Vty as V
-import qualified Brick.Main as M
 import Brick.Widgets.Core
+    ( (<+>),
+      fill,
+      hLimit,
+      padBottom,
+      padTop,
+      str,
+      txt,
+      vBox,
+      vLimit,
+      withAttr,
+      Padding(Pad) )
 import qualified Brick.Widgets.Edit as E
 import qualified Brick.AttrMap as A
 import Effectful (runEff)
 import qualified Database.PostgreSQL.Simple as SQL
 import Brick
+    ( defaultMain,
+      halt,
+      App(..),
+      CursorLocation,
+      Widget,
+      BrickEvent(VtyEvent),
+      EventM,
+      AttrMap,
+      attrMap,
+      attrName,
+      nestEventM',
+      fg,
+      on,
+      zoom )
 import Brick.Forms
-import Brick.Focus
+    ( (@@=),
+      editPasswordField,
+      editTextField,
+      focusedFormInputAttr,
+      handleFormEvent,
+      invalidFormInputAttr,
+      newForm,
+      renderForm,
+      setFieldValid,
+      Form(..) )
+import Brick.Focus ( focusRingCursor )
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as C
 import qualified Brick.Widgets.List as L
 import AnimeRss.Ids (UserId)
 import AnimeRss.DataModel.Queries
+    ( deleteDbUser, insertDbUser, listDbUsers )
 import Crypto.PasswordStore (hashPassword, defaultOptions)
 import AnimeRss.DataModel.Types
-import DBE
+    ( DbPasswordHash(DbPasswordHash), User(..), CreateUser(..) )
+import DBE ( runDBESingle )
 import Options
+    ( options, Configuration(Configuration, databaseConnectionString) )
 import Data.Vector (Vector)
-import Options.Applicative hiding (str)
-import Data.ByteString.Char8 hiding (length, unlines)
-import AnimeRss.DataModel.Migrations
+import Options.Applicative ( execParser )
+import Data.ByteString.Char8 ( pack )
+import AnimeRss.DataModel.Migrations ( migrateAll )
+import Optics.State.Operators ( (.=) )
 
 data Name
     = NameField
@@ -57,12 +126,14 @@ data AppStage e
     = UserList
     | AddingNewUser (Form NewUserInfo e Name)
     | Error Text (AppState e)
+  deriving stock (Generic)
 
 data AppState e = AppState
     { dbConnection :: SQL.Connection
     , stage :: AppStage e
     , userList :: L.GenericList Name Vector UserInfo
     }
+  deriving stock (Generic)
 
 -- This form is covered in the Brick User Guide; see the "Input Forms"
 -- section.
@@ -93,7 +164,7 @@ drawError err _previousApp =
     [C.hCenter . C.vCenter . B.border . hLimit 80 . C.hCenter $ txt err]
 
 userInfoAttr :: A.AttrName
-userInfoAttr = L.listSelectedAttr <> "userInfo"
+userInfoAttr = L.listSelectedAttr <> attrName "userInfo"
 
 listDrawElement :: Bool -> UserInfo -> Widget Name
 listDrawElement sel a =
@@ -124,12 +195,15 @@ draw AppState{..} = draw' stage
           form = B.border . padTop (Pad 1) . hLimit 50 $ renderForm f
     draw' (Error err previousApp) = drawError err previousApp
 
-handleEvents :: AppState e -> BrickEvent Name e -> EventM Name (Next (AppState e))
-handleEvents s@AppState{..} = handleEvents' stage
+handleEvents :: BrickEvent Name e -> EventM Name (AppState e) ()
+handleEvents event = do
+  AppState{..} <- get
+  handleEvents' stage event
   where
+    handleEvents' :: AppStage e -> BrickEvent Name e -> EventM Name (AppState e) ()
     handleEvents' UserList = \case
-        VtyEvent V.EvResize {} -> continue s
-        VtyEvent (V.EvKey V.KEsc []) -> halt s
+        VtyEvent V.EvResize {} -> pure ()
+        VtyEvent (V.EvKey V.KEsc []) -> halt
         VtyEvent (V.EvKey (V.KChar '+') []) -> do
             let initialUserInfo = NewUserInfo
                     { name = ""
@@ -137,22 +211,25 @@ handleEvents s@AppState{..} = handleEvents' stage
                     , password = ""
                     , passwordConfirm = ""
                     }
-            continue $ s { stage = AddingNewUser $ mkCreateUserForm initialUserInfo}
-        VtyEvent (V.EvKey (V.KChar '-') []) ->
-            case L.listSelectedElement userList of
-                Nothing -> M.continue s
+            #stage .= AddingNewUser (mkCreateUserForm initialUserInfo)
+            pure ()
+        VtyEvent (V.EvKey (V.KChar '-') []) -> do
+            dbConnection <- use #dbConnection
+            zoom (toLensVL #userList) $ do
+              userList <- get
+              case L.listSelectedElement userList of
+                Nothing -> pure ()
                 Just (i, UserInfo{..}) -> do
                     void . liftIO . runEff . runDBESingle dbConnection $ deleteDbUser id
-                    M.continue $ s {userList = L.listRemove i userList }
-        VtyEvent e -> do
-            userList' <- L.handleListEvent e userList
-            M.continue $ s { userList = userList' }
-        _ -> continue s
+                    modify (L.listRemove i)
+        VtyEvent ev -> zoom (toLensVL #userList) $ L.handleListEvent ev
+        _ -> pure ()
     handleEvents' (AddingNewUser form) = \case
-        VtyEvent V.EvResize {} -> continue s
+        VtyEvent V.EvResize {} -> pure ()
         VtyEvent (V.EvKey V.KEsc []) -> do
-            continue $ s { stage = UserList }
+            #stage .= UserList
         VtyEvent (V.EvKey V.KEnter []) -> do
+            s <- get
             let newUser = formState form
             let nameCheck = newUser ^. #name /= ""
             let emailCheck = newUser ^. #email /= ""
@@ -162,31 +239,35 @@ handleEvents s@AppState{..} = handleEvents' stage
             if nameCheck && emailCheck && passwordEmpty && passwordCheck
                 then do
                     newUser' <- toCreateUser newUser
-                    maybeUser <- liftIO . runEff . runDBESingle dbConnection $ insertDbUser newUser'
+                    maybeUser <- liftIO . runEff . runDBESingle (s ^. #dbConnection) $ insertDbUser newUser'
                     case maybeUser of
                         Nothing ->
-                            continue s { stage = Error "User with given email already exists." s }
+                             #stage .= Error "User with given email already exists." s
                         Just user -> do
-                            let pos = length $ L.listElements userList
-                            continue $ s
-                                { stage = UserList
-                                , userList = L.listInsert pos (toUserInfo user) userList
-                                }
+                            let pos = length $ L.listElements (s ^. #userList)
+                            #stage .= UserList
+                            #userList .= L.listInsert pos (toUserInfo user) (s ^. #userList)
+
                 else
-                    continue s { stage =
-                        Error (toError nameCheck emailCheck passwordEmpty passwordCheck) s }
+                    #stage .=
+                        Error (toError nameCheck emailCheck passwordEmpty passwordCheck) s
         -- Enter quits only when we aren't in the multi-line editor.
         ev -> do
-            form' <- handleFormEvent ev form
+            maybeState <- gets (preview (#stage % #_AddingNewUser))
+            case maybeState of
+                Nothing -> pure ()
+                Just state' -> do
+                    newState <- nestEventM' state' $ do
+                        handleFormEvent ev
+                        fs <- gets formState
+                        let passwordCheck = fs ^. #password == fs ^. #passwordConfirm
+                        modify (setFieldValid passwordCheck PasswordConfirmField)
+                    modify (#stage % #_AddingNewUser .~ newState)
 
-            -- Example of external validation:
-            -- Require age field to contain a value that is at least 18.
-            let fs = formState form'
-            let passwordCheck = fs ^. #password == fs ^. #passwordConfirm
-            continue $ s { stage = AddingNewUser $ setFieldValid passwordCheck PasswordConfirmField form' }
+
     handleEvents' (Error _ previousApp) = \case
-        VtyEvent (V.EvKey _ _) -> continue previousApp
-        _ -> continue s
+        VtyEvent (V.EvKey _ _) -> put previousApp
+        _ -> pure ()
 
 when' :: Bool -> a -> [a]
 when' v m = if v then pure m else mempty
@@ -210,12 +291,12 @@ app = App
     { appDraw = draw
     , appHandleEvent = handleEvents
     , appChooseCursor = chooseCursor
-    , appStartEvent = pure
+    , appStartEvent = pure ()
     , appAttrMap = const theMap
     }
 
-toUserInfo :: GetUser -> UserInfo
-toUserInfo GetUser{..} = UserInfo {..}
+toUserInfo :: User -> UserInfo
+toUserInfo User{..} = UserInfo {..}
 
 toCreateUser :: MonadIO m => NewUserInfo -> m CreateUser
 toCreateUser NewUserInfo{..} = do

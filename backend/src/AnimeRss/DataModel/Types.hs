@@ -1,13 +1,12 @@
 {-# LANGUAGE DeriveAnyClass #-}
 
 module AnimeRss.DataModel.Types
-  ( GetEpisode (..)
+  ( Episode (..)
   , CreateEpisode (..)
   , CreateUser (..)
-  , GetUser (..)
+  , User (..)
   , TemporaryKey (..)
-  , CreateAnime (..)
-  , GetAnime (..)
+  , Anime (..)
   , UserFollows (..)
   , Error (..)
   , unexpectedAmountOfResults
@@ -57,7 +56,7 @@ data UnexpectedAmountOfResultsData = UnexpectedAmountOfResultsData
 unexpectedAmountOfResults :: Text -> Int -> Int -> Int -> Error
 unexpectedAmountOfResults origin expectedMininumCount expectedMaximumCount count = UnexpectedAmountOfResults $ UnexpectedAmountOfResultsData {..}
 
-data GetEpisode = GetEpisode
+data Episode = Episode
   { id :: EpisodeId
   , url :: Url
   , number :: Text
@@ -69,9 +68,10 @@ data GetEpisode = GetEpisode
 
 data CreateEpisode = CreateEpisode
   { url :: Url
+  , title :: Text
   , number :: Text
-  , date :: UTCTime
-  , animeId :: AnimeId
+  , imageUrl :: Url
+  , animeUrl :: Url
   }
   deriving stock (Show, Generic)
 
@@ -82,7 +82,7 @@ data CreateUser = CreateUser
   }
   deriving stock (Show, Generic)
 
-data GetUser = GetUser
+data User = User
   { id :: UserId
   , name :: Text
   , email :: Text
@@ -100,15 +100,7 @@ data TemporaryKey = TemporaryKey
   }
   deriving stock (Show, Generic)
 
-data CreateAnime = CreateAnime
-  { title :: Text
-  , imgUrl :: Text
-  , url :: Text
-  , date :: UTCTime
-  }
-  deriving stock (Show, Generic)
-
-data GetAnime = GetAnime
+data Anime = Anime
   { id :: AnimeId
   , title :: Text
   , imgUrl :: Text
@@ -116,6 +108,7 @@ data GetAnime = GetAnime
   , date :: UTCTime
   }
   deriving stock (Show, Generic)
+  deriving anyclass (SQL.FromRow)
 
 data UserFollows = UserFollows
   { userId :: UserId
@@ -141,4 +134,4 @@ instance SQL.FromField DbPasswordHash where
     >>= (either mkError pure . decode . SQL.fromBinary)
     where
       mkError :: String -> SQL.Conversion DbPasswordHash
-      mkError e = SQL.returnError SQL.ConversionFailed field e
+      mkError = SQL.returnError SQL.ConversionFailed field

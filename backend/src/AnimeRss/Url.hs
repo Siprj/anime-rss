@@ -11,7 +11,6 @@ import Network.URI
 
 newtype Url = Url URI
   deriving stock (Show, Eq, Generic)
-  deriving newtype ()
 
 instance SQL.FromField Url where
   fromField :: SQL.FieldParser Url

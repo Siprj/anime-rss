@@ -10,30 +10,34 @@ module Main
     (main)
   where
 
-import Control.Concurrent (forkIO)
-import Control.Monad.Freer.Internal (Eff)
-import Control.Monad.Freer.Reader (runReader)
-import Control.Monad.Freer (runM, runNat)
-import Control.Monad.IO.Class (liftIO)
+import Control.Concurrent (forkIO, threadDelay)
 import Data.Function (($), (.))
-import Data.Proxy (Proxy(Proxy))
-import Network.URI (URI)
-import Network.Wai.Handler.Warp (run)
-import Rest.Server (Context(Context), apiHander)
-import Rest.Api (Api)
-import Servant.Server (Handler, Context ((:.), EmptyContext), serveWithContext, HasServer (hoistServerWithContext))
+import AnimeRss.Rest.Server (Context(Context), apiHander)
+import AnimeRss.Rest.Api (Api)
 import System.IO (IO)
+import Effectful (runEff, MonadIO (liftIO))
 
-import Control.Monad.Freer.Service (ServiceChannel)
-import DataModel.Service
-    ( DataModel
-    , createDataModelChannel
-    , runDataModel
-    , runDataModelEffect
-    )
-import Network.URI.Static (staticURI)
-import Scraper.Service (runScraper)
-import Servant.Auth.Server (defaultCookieSettings, defaultJWTSettings, generateKey, CookieSettings (cookieIsSecure), JWTSettings, IsSecure (NotSecure))
+--import DataModel.Service
+--    ( DataModel
+--    , createDataModelChannel
+--    , runDataModel
+--    , runDataModelEffect
+--    )
+import AnimeRss.Scraper.Service (runScraper)
+import DBE (runDBE, createConnectionPool)
+import Control.Monad (forever)
+import Network.URI (URI)
+import Servant.Auth.Server (CookieSettings(cookieIsSecure), JWTSettings, generateKey, IsSecure (NotSecure), defaultCookieSettings, defaultJWTSettings)
+import Data.Proxy (Proxy(Proxy))
+import Network.URI.Static ( staticURI )
+import Servant (Context((:.), EmptyContext), throwError, HasServer (hoistServerWithContext), serveWithContext)
+import Effectful.Reader.Dynamic ( runReader )
+import Data.Either ( either )
+import Network.Wai.Handler.Warp (run)
+import AnimeRss.DataModel.Migrations ( migrateAll )
+import Control.Applicative (pure)
+import Effectful.Error.Dynamic (runErrorNoCallStack)
+import Data.Pool (withResource)
 
 
 baseUrl :: URI
@@ -41,35 +45,31 @@ baseUrl = $$(staticURI "https://gogoanime.io/")
 
 main :: IO ()
 main = do
-    databaseChan <- createDataModelChannel
-    _ <- forkIO $ runDataModel databaseChan
-
-    _ <- forkIO $ runScraper' databaseChan
-    restApp databaseChan
+    dbPool <- createConnectionPool "host=postgres dbname=anime-rss user=postgres"
+    withResource dbPool migrateAll
+    _ <- forkIO $ runScraper' dbPool
+    restApp dbPool
+    forever $ threadDelay 1000000000
   where
 
-    restApp :: ServiceChannel DataModel -> IO ()
-    restApp databaseChan = do
+    restApp dbPool = do
         myKey <- generateKey
         let cookiesSettings = defaultCookieSettings { cookieIsSecure = NotSecure }
             jwtCfg = defaultJWTSettings myKey
             cfg = cookiesSettings :. jwtCfg :. EmptyContext
-            nat eff =
-                runM . intLiftIO . runDataModelEffect databaseChan
-                $ runReader eff (Context baseUrl cookiesSettings jwtCfg )
+            nat eff = do
+                res <- liftIO . runEff . runErrorNoCallStack . runDBE dbPool
+                  $ runReader (Context baseUrl cookiesSettings jwtCfg ) eff
+                either throwError pure res
 
-        run 8082 .  serveWithContext restAPI cfg $
+        run 8080 .  serveWithContext restAPI cfg $
                 hoistServerWithContext restAPI (Proxy :: Proxy '[CookieSettings, JWTSettings]) nat apiHander
 
     restAPI :: Proxy Api
     restAPI = Proxy
 
 
-    runScraper' databaseChan =
+    runScraper' dbPool =
         -- Time is is in milliseconds!!!
         -- This is approximately 15 minutes.
-        runM . runDataModelEffect databaseChan $ runScraper 1000000000
-
-intLiftIO :: Eff '[IO, Handler] r -> Eff '[Handler] r
-intLiftIO = runNat (liftIO :: IO a -> Handler a)
-
+        forever . runEff . runDBE dbPool $ runScraper 1000000000

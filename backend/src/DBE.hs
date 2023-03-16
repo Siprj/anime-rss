@@ -1,11 +1,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE LambdaCase #-}
 
 module DBE
   ( PostgreSql
-  , createConnectionPool
-  , runDBE
   , query
   , query_
   , queryWith
@@ -20,111 +19,99 @@ module DBE
   , withTransactionMode
   , withTransaction
   , begin
+  , runDBE
   , runDBESingle
+  , createConnectionPool
   )
 where
 
-import Control.Monad.Catch
-import Data.Pool
 import qualified Database.PostgreSQL.Simple as SQL
 import qualified Database.PostgreSQL.Simple.FromRow as SQL
 import qualified Database.PostgreSQL.Simple.Transaction as SQL
 import Effectful
-import Effectful.Reader.Static
-import Relude hiding (Reader, ask, id, runReader)
+    ( type (:>), Effect, Dispatch(Dynamic), DispatchOf, Eff, IOE )
+import Relude ( ($), Int64 )
+import Effectful.Dispatch.Dynamic (send, LocalEnv, reinterpret, localSeqUnlift)
+import qualified DBE.Static as S
+import Data.Pool ( Pool )
+import DBE.Static (createConnectionPool)
 
-query :: ([PostgreSql, IOE] :>> es, SQL.ToRow q, SQL.FromRow r) => SQL.Query -> q -> Eff es [r]
-query sql data' = do
-  connection <- ask
-  liftIO $ SQL.query connection sql data'
+data PostgreSql :: Effect where
+  Query :: (SQL.ToRow q, SQL.FromRow r) => SQL.Query -> q -> PostgreSql m [r]
+  Query_ :: (SQL.FromRow r) => SQL.Query -> PostgreSql m [r]
+  QueryWith :: (SQL.ToRow q) => SQL.RowParser r -> SQL.Query -> q -> PostgreSql m [r]
+  QueryWith_ :: SQL.RowParser r -> SQL.Query -> PostgreSql m [r]
+  Returning :: (SQL.ToRow q, SQL.FromRow r) => SQL.Query -> [q] -> PostgreSql m [r]
+  Execute :: (SQL.ToRow q) => SQL.Query -> q -> PostgreSql m Int64
+  Execute_ :: SQL.Query -> PostgreSql m Int64
+  ExecuteMany :: (SQL.ToRow q) => SQL.Query -> [q] -> PostgreSql m Int64
+  BeginMode :: SQL.TransactionMode -> PostgreSql m ()
+  Commit :: PostgreSql m ()
+  Rollback :: PostgreSql m ()
+  WithTransactionMode :: SQL.TransactionMode -> m a -> PostgreSql m a
 
-query_ :: ([PostgreSql, IOE] :>> es, SQL.FromRow r) => SQL.Query -> Eff es [r]
-query_ sql = do
-  connection <- ask
-  liftIO $ SQL.query_ connection sql
+type instance DispatchOf PostgreSql = 'Dynamic
 
-queryWith :: ([PostgreSql, IOE] :>> es, SQL.ToRow q) => SQL.RowParser r -> SQL.Query -> q -> Eff es [r]
-queryWith rowParser sql data' = do
-  connection <- ask
-  liftIO $ SQL.queryWith rowParser connection sql data'
+query :: (PostgreSql :> es, SQL.ToRow q, SQL.FromRow r) => SQL.Query -> q -> Eff es [r]
+query sql data' = send $ Query sql data'
 
-queryWith_ :: ([PostgreSql, IOE] :>> es) => SQL.RowParser r -> SQL.Query -> Eff es [r]
-queryWith_ rowParser sql = do
-  connection <- ask
-  liftIO $ SQL.queryWith_ rowParser connection sql
+query_ :: (PostgreSql :> es, SQL.FromRow r) => SQL.Query -> Eff es [r]
+query_ sql = send $ Query_ sql
 
-returning :: ([PostgreSql, IOE] :>> es, SQL.ToRow q, SQL.FromRow r) => SQL.Query -> [q] -> Eff es [r]
-returning sql data' = do
-  connection <- ask
-  liftIO $ SQL.returning connection sql data'
+queryWith :: (PostgreSql :> es, SQL.ToRow q) => SQL.RowParser r -> SQL.Query -> q -> Eff es [r]
+queryWith rowParser sql data' = send $ QueryWith rowParser sql data'
 
-execute :: ([PostgreSql, IOE] :>> es, SQL.ToRow q) => SQL.Query -> q -> Eff es Int64
-execute sql data' = do
-  connection <- ask
-  liftIO $ SQL.execute connection sql data'
+queryWith_ :: (PostgreSql :> es) => SQL.RowParser r -> SQL.Query -> Eff es [r]
+queryWith_ rowParser sql = send $ QueryWith_ rowParser sql
 
-execute_ :: ([PostgreSql, IOE] :>> es) => SQL.Query -> Eff es Int64
-execute_ sql = do
-  connection <- ask
-  liftIO $ SQL.execute_ connection sql
+returning :: (PostgreSql :> es, SQL.ToRow q, SQL.FromRow r) => SQL.Query -> [q] -> Eff es [r]
+returning sql data' = send $ Returning sql data'
 
-executeMany :: ([PostgreSql, IOE] :>> es, SQL.ToRow q) => SQL.Query -> [q] -> Eff es Int64
-executeMany sql data' = do
-  connection <- ask
-  liftIO $ SQL.executeMany connection sql data'
+execute :: (PostgreSql :> es, SQL.ToRow q) => SQL.Query -> q -> Eff es Int64
+execute sql data' = send $ Execute sql data'
 
-beginMode :: ([PostgreSql, IOE] :>> es) => SQL.TransactionMode -> Eff es ()
-beginMode transactionMode = do
-  connection <- ask
-  liftIO $ SQL.beginMode transactionMode connection
+execute_ :: (PostgreSql :> es) => SQL.Query -> Eff es Int64
+execute_ sql = send $ Execute_ sql
 
-begin :: ([PostgreSql, IOE] :>> es) => Eff es ()
+executeMany :: (PostgreSql :> es, SQL.ToRow q) => SQL.Query -> [q] -> Eff es Int64
+executeMany sql data' = send $ ExecuteMany sql data'
+
+beginMode :: (PostgreSql :> es) => SQL.TransactionMode -> Eff es ()
+beginMode transactionMode = send $ BeginMode transactionMode
+
+begin :: (PostgreSql :> es) => Eff es ()
 begin = beginMode SQL.defaultTransactionMode
 
-commit :: ([PostgreSql, IOE] :>> es) => Eff es ()
-commit = do
-  connection <- ask
-  liftIO $ SQL.commit connection
+commit :: (PostgreSql :> es) => Eff es ()
+commit = send Commit
 
-rollback :: ([PostgreSql, IOE] :>> es) => Eff es ()
-rollback = do
-  connection <- ask
-  liftIO $ SQL.rollback connection
+rollback :: (PostgreSql :> es) => Eff es ()
+rollback = send Rollback
 
-withTransactionMode :: ([PostgreSql, IOE] :>> es) => SQL.TransactionMode -> Eff es a -> Eff es a
-withTransactionMode transactionMode act = do
-  mask $ \restore -> do
-    beginMode transactionMode
-    r <- restore act `onException` rollback
-    commit
-    return r
+withTransactionMode :: (PostgreSql :> es) => SQL.TransactionMode -> Eff es a -> Eff es a
+withTransactionMode transactionMode eff = send $ WithTransactionMode transactionMode eff
 
-withTransaction :: ([PostgreSql, IOE] :>> es) => Eff es a -> Eff es a
+withTransaction :: (PostgreSql :> es) => Eff es a -> Eff es a
 withTransaction = withTransactionMode SQL.defaultTransactionMode
 
-type PostgreSql = Reader SQL.Connection
+runDBESingle :: (IOE :> es) => SQL.Connection -> Eff (PostgreSql : es) a -> Eff es a
+runDBESingle connection = reinterpret (S.runDBESingle connection) localDBE
 
-type DBConnectionPool = Pool SQL.Connection
+runDBE :: (IOE :> es) => Pool SQL.Connection -> Eff (PostgreSql : es) a -> Eff es a
+runDBE connectionPool = reinterpret (S.runDBE connectionPool) localDBE
 
-createConnectionPool :: SQL.ConnectInfo -> IO DBConnectionPool
-createConnectionPool connectionInfo = newPool poolConfig
-  where
-    poolConfig =
-      PoolConfig
-        { createResource = SQL.connect connectionInfo
-        , freeResource = SQL.close
-        , poolCacheTTL = 60
-        , poolMaxResources = 60
-        }
-
--- | Run the 'FileSystem' effect.
-runDBE :: (IOE :> es) => DBConnectionPool -> Eff (PostgreSql : es) a -> Eff es a
-runDBE connectionPool eff = do
-  bracket
-    (liftIO $ takeResource connectionPool)
-    (\(connection, localPoll) -> liftIO $ putResource localPoll connection)
-    (\(connection, _) -> runReader connection eff)
-
-runDBESingle :: SQL.Connection -> Eff (PostgreSql : es) a -> Eff es a
-runDBESingle connection eff = runReader connection eff
+localDBE :: (S.PostgreSql :> es) => LocalEnv localEs es -> PostgreSql (Eff localEs) a -> Eff es a
+localDBE env = \case
+  Query sql data' -> S.query sql data'
+  Query_ sql -> S.query_ sql
+  QueryWith rowParser sql data' -> S.queryWith rowParser sql data'
+  QueryWith_ rowParser sql -> S.queryWith_ rowParser sql
+  Returning sql data' -> S.returning sql data'
+  Execute sql data' -> S.execute sql data'
+  Execute_ sql -> S.execute_ sql
+  ExecuteMany sql data' -> S.executeMany sql data'
+  BeginMode transactionMode -> S.beginMode transactionMode
+  Commit -> S.commit
+  Rollback -> S.rollback
+  WithTransactionMode transactionMode eff -> localSeqUnlift env $ \unlift -> S.withTransactionMode transactionMode (unlift eff)
 
