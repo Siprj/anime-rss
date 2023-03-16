@@ -1,13 +1,8 @@
 # Ubuntu 20.04 LTS (Focal Fossa), supported until April 2025.
-ARG UBUNTU_VERSION=20.04
+ARG UBUNTU_VERSION=22.04
 ARG GHC_VERSION=9.4.4
 ARG CABAL_VERSION=3.6.2.0
-# Given that BuildKit can build multiple stages at the same time, it might be a good idea
-# to keep the number of jobs quite low depending on the number of stages that can
-# potentially run cabal.
-ARG CABAL_INDEX_STATE=2022-06-15T00:00:00Z
-ARG HLINT_VERSION=3.4
-# The version (image tag) of the devel image used for building the production image.
+ARG HLINT_VERSION=3.5
 
 FROM ubuntu:$UBUNTU_VERSION as devel-base
 ARG CABAL_INDEX_STATE
@@ -18,6 +13,8 @@ RUN apt-get update \
     && apt-get install -y \
        build-essential curl locales libgmp-dev libtinfo-dev zlib1g-dev git \
        libpq-dev \
+    && curl -fsSL https://deb.nodesource.com/setup_19.x | bash - \
+    && apt-get install -y nodejs \
     && localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man
 ENV LANG=en_US.UTF-8
@@ -27,13 +24,15 @@ RUN mkdir -p /opt/ghcup/bin/ \
     && chmod +x /opt/ghcup/bin/ghcup \
     && ghcup install ghc $GHC_VERSION -i /opt/ghc/ \
     && ghcup install cabal $CABAL_VERSION -i /opt/cabal/bin/
-ENV PATH="/opt/ghc/bin:/opt/cabal/bin:$PATH"
-RUN cabal update --index-state="$CABAL_INDEX_STATE" \
-    && cabal install --installdir=/usr/bin\
-       hlint-$HLINT_VERSION \
-    && git clone https://github.com/Siprj/cabal-fmt \
-    && (cd cabal-fmt && cabal install --install-method=copy --installdir=/usr/bin) \
-    && rm -r -f cabal-fmt && rm -r -f /root/.cabal \
+ENV PATH="/opt/hlint/:/opt/ghc/bin:/opt/cabal/bin:$PATH"
+RUN HLIN_TMP=$(mktemp -d ".hlint-XXXXXX") \
+    && curl -L --proto '=https' -o "${HLIN_TMP}/hlint.tar.gz" https://github.com/ndmitchell/hlint/releases/download/v${HLINT_VERSION}/hlint-${HLINT_VERSION}-x86_64-linux.tar.gz \
+    && mkdir -p /opt/hlint/ \
+    && tar xf "${HLIN_TMP}/hlint.tar.gz" -C /opt/hlint/ \
+    && rm -r -f "${HLIN_TMP}" \
+    && cabal update \
+    && cabal install --install-method=copy --installdir=/usr/bin --install-method=copy cabal-fmt \
+    && rm -r -f /root/.cabal \
     && echo root:password | chpasswd
 
 FROM devel-base as devel

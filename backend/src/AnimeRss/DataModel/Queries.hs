@@ -7,6 +7,11 @@ module AnimeRss.DataModel.Queries
   , deleteDbUser
   , insertEpisode
   , listAnimes
+  , selectUserByEmail
+  , listEpisodesByChannelId
+  , insertUserFollows
+  , deleteUserFollows
+  , listUserRelatedAnime
   )
 where
 
@@ -19,6 +24,7 @@ import Database.PostgreSQL.Simple.SqlQQ (sql)
 import Effectful
 import Relude hiding (head, id)
 import Data.List
+import Data.UUID (UUID)
 -- import Relude.Unsafe (head)
 --
 -- expecOneResult :: Text -> [a] -> Eff es a
@@ -154,3 +160,87 @@ listAnimes = do
     FROM animes
     ORDER by date DESC
     |]
+
+selectUserByEmail :: (PostgreSql :> es) => Text -> Eff es (Maybe User)
+selectUserByEmail email = do
+  ret <-
+    query
+      [sql| SELECT
+        id,
+        name,
+        email,
+        news_channel,
+        password
+    FROM users
+    WHERE email = ?
+    |]
+      (SQL.Only email)
+  expecOneOrZeroResults "getDbUser" ret
+
+listEpisodesByChannelId :: (PostgreSql :> es, IOE :> es) => UUID -> Eff es [Episode]
+listEpisodesByChannelId channelId = do
+  liftIO $ putStrLn "listEpisodesByChannelId"
+  ret <-
+    query
+      [sql| SELECT
+        id
+    FROM users
+    WHERE news_channel = ?
+    |]
+      (SQL.Only channelId)
+  userId <- expectOneResult @(SQL.Only UUID) "selectUserIdByChannelId" ret
+  query
+      [sql| SELECT
+        a.title,
+        e.url,
+        e.number,
+        a.image_url,
+        e.date
+    FROM episodes e
+    INNER JOIN animes a
+        ON e.anime_id = a.id
+    INNER JOIN user_follows u
+        ON u.anime_id = a.id
+    WHERE u.user_id = ?
+    ORDER BY e.date DESC
+    LIMIT 500
+    |]
+    userId
+
+insertUserFollows :: (PostgreSql :> es, IOE :> es) => CreateUserFollows -> Eff es ()
+insertUserFollows CreateUserFollows{..} = do
+  liftIO $ putStrLn "insertUserFollows"
+  void $
+    execute
+      [sql| INSERT INTO user_follows (
+        anime_id,
+        user_id
+    )
+    VALUES (?,?)
+    |]
+      (animeId, userId)
+
+deleteUserFollows :: (PostgreSql :> es, IOE :> es) => DeleteUserFollows -> Eff es ()
+deleteUserFollows DeleteUserFollows{..} = do
+  liftIO $ putStrLn "insertUserFollows"
+  void $ execute
+    [sql| DELETE FROM user_follows WHERE user_id = ? AND anime_id = ?
+    |]
+    (userId, animeId)
+
+listUserRelatedAnime :: (PostgreSql :> es, IOE :> es) => UserId -> Eff es [UserRelatedAnime]
+listUserRelatedAnime userId = do
+  liftIO $ putStrLn "listUserRelatedAnime"
+  query
+      [sql| SELECT
+        a.id,
+        a.title,
+        a.url,
+        a.image_url,
+        a.date,
+        CASE WHEN uf.anime_id IS NULL THEN false ELSE true END AS following
+    FROM anime a
+    LEFT JOIN user_follows uf ON a.id = uf.anime_idg
+    WHERE uf.user_id = ?
+    |]
+      (SQL.Only userId)

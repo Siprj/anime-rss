@@ -41,7 +41,7 @@ import Data.Pool (withResource)
 
 
 baseUrl :: URI
-baseUrl = $$(staticURI "https://gogoanime.io/")
+baseUrl = $$(staticURI "https://gogoanime.sk/")
 
 main :: IO ()
 main = do

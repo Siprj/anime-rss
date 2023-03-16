@@ -10,7 +10,8 @@ import qualified Database.PostgreSQL.Simple.ToField as SQL
 import Network.URI
 
 newtype Url = Url URI
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Eq, Generic)
+  deriving newtype (Show)
 
 instance SQL.FromField Url where
   fromField :: SQL.FieldParser Url

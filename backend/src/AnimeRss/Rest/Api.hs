@@ -9,6 +9,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -59,7 +60,7 @@ instance FromJWT LoggedInUser
 type ChannelId = UUID
 
 data User = User
-    { userId ::UserId
+    { userId :: UserId
     , email :: Email
     , name :: Text
     , episodeChannel :: UUID
@@ -110,10 +111,10 @@ instance FromJSON PostAnimeFollow
 
 type Protected
     = "user" :> Get '[JSON] User
-    :<|> "followe" :> "anime" :> ReqBody '[JSON] [PostAnimeFollow] :> Verb 'POST 204 '[JSON] NoContent
+    :<|> "follow" :> "anime" :> ReqBody '[JSON] [PostAnimeFollow] :> Verb 'POST 204 '[JSON] NoContent
     :<|> "animes" :> Get '[JSON] [Anime]
 
 type Api = "atom" :> "episodes" :> Capture "channel-id" ChannelId :> Get '[AtomFeed] Feed
     :<|> "atom" :> "animes" :> Get '[AtomFeed] Feed
-    :<|> "login" :> ReqBody '[JSON] Login :> Post '[JSON] (Headers '[Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
-    :<|> Servant.Auth.Server.Auth '[Cookie] LoggedInUser :> Protected
+    :<|> "api" :> "login" :> ReqBody '[JSON] Login :> Post '[JSON] (Headers '[Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
+    :<|> "api" :> Servant.Auth.Server.Auth '[Cookie] LoggedInUser :> Protected

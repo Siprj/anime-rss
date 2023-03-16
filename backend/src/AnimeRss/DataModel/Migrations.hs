@@ -58,7 +58,7 @@ initEpisodesTableChange =
           [sql| CREATE TABLE episodes (
         id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
         url TEXT NOT NULL UNIQUE,
-        number REAL NOT NULL,
+        number TEXT NOT NULL,
         date TIMESTAMP WITH TIME ZONE DEFAULT (now() AT TIME ZONE('utc')),
         anime_id UUID NOT NULL,
         FOREIGN KEY (anime_id) REFERENCES animes(id) ON DELETE CASCADE,
@@ -81,7 +81,7 @@ initUsersTableChange =
         id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
         name TEXT NOT NULL ,
         email TEXT NOT NULL UNIQUE,
-        news_channel UUID DEFAULT uuid_generate_v4(),
+        news_channel UUID DEFAULT uuid_generate_v4() UNIQUE,
         password BYTEA NOT NULL
         )|]
     }
@@ -140,9 +140,10 @@ initUserFollowsTableChange =
           [sql| CREATE TABLE user_follows (
         id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
         user_id UUID NOT NULL,
-        image_url TEXT NOT NULL,
-        url TEXT NOT NULL UNIQUE,
+        anime_id UUID NOT NULL,
         date TIMESTAMP WITH TIME ZONE DEFAULT (now() AT TIME ZONE('utc')),
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (anime_id) REFERENCES animes(id) ON DELETE CASCADE,
+        UNIQUE (user_id, anime_id)
         )|]
     }

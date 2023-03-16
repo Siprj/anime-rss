@@ -20,6 +20,7 @@ services:
       - 127.0.0.1:8888:8888
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${SOURCE_DIRECTORY}/frontend:/frontend:ro
       - tmp-nginx:/tmp/nginx/
 
   devel:

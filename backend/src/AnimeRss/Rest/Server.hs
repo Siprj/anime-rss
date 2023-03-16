@@ -8,6 +8,8 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE LambdaCase #-}
 
 module AnimeRss.Rest.Server
     ( Context(..)
@@ -16,7 +18,7 @@ module AnimeRss.Rest.Server
     )
   where
 
-import Relude (show)
+import Relude (show, Foldable (foldr), mapM_)
 import Control.Applicative (pure)
 import Data.Function (($), (.))
 import Data.Functor (fmap)
@@ -29,8 +31,8 @@ import Data.Time
     , formatTime
     , rfc822DateFormat
     )
-import Servant ((:<|>)((:<|>)), Header, Headers, URI, NoContent, ServerT, ServerError)
-import Servant.Auth.Server ( SetCookie, AuthResult, CookieSettings, JWTSettings )
+import Servant ((:<|>)((:<|>)), Header, Headers, URI, NoContent(NoContent), ServerT, ServerError, err401, err409)
+import Servant.Auth.Server ( SetCookie, AuthResult (..), CookieSettings, JWTSettings, acceptLogin )
 import Text.Atom.Feed
     ( Entry(entryLinks, entrySummary)
     , TextContent(TextString, HTMLString)
@@ -46,14 +48,20 @@ import Text.Feed.Types (Feed)
 
 import qualified AnimeRss.DataModel.Types as Core
 -- import AnimeRss.DataModel.Queries (listAnime, selectUserByEmail, listUserRelatedAnime, selectUser, modifyUsersAnime, listChannelEpisodes)
-import AnimeRss.Rest.Api (ChannelId, Api, Protected, Login, LoggedInUser)
+import AnimeRss.Rest.Api (ChannelId, Api, Protected, Login (..), LoggedInUser (LoggedInUser, userId), User(..), PostAnimeFollow(..), Anime(..))
 import AnimeRss.Rest.Authentication ()
-import Effectful ( Eff, (:>), IOE )
-import Effectful.Error.Dynamic ( Error )
+import Effectful ( Eff, (:>), IOE, MonadIO (..) )
+import Effectful.Error.Dynamic ( Error, throwError )
 import Effectful.Reader.Dynamic ( ask, Reader )
 import DBE ( PostgreSql )
-import GHC.Base (undefined)
-import AnimeRss.DataModel.Queries (listAnimes)
+import Control.Monad ((>>=))
+import AnimeRss.DataModel.Queries (listAnimes, selectUserByEmail, listEpisodesByChannelId, getDbUserById, insertUserFollows, deleteUserFollows, listUserRelatedAnime)
+import Crypto.Error (CryptoFailable(..))
+import Crypto.PasswordStore
+import Data.Text.Encoding
+import System.IO
+import AnimeRss.DataModel.Types (toPasswordHash, CreateUserFollows(..), DeleteUserFollows(..))
+import AnimeRss.Ids (UserId)
 
 
 data Context = Context
@@ -65,126 +73,118 @@ data Context = Context
 type Handler' es = (Error ServerError :> es, Reader Context :> es, PostgreSql :> es)
 type RestServer api es = ServerT api (Eff es)
 
---maybeThrow :: ServerError -> Maybe a -> Handler' a
---maybeThrow e = \case
---    Nothing -> throwError' e
---    Just v -> pure v
---
---showT :: Show a => a -> Text
---showT = pack . show
---
---throw :: ServerError -> Handler a
---throw = throwError
---
---throwError' :: ServerError -> Handler' a
---throwError' = send . throw
---
---authHelper :: AuthResult LoggedInUser -> Handler' LoggedInUser
---authHelper = \case
---  BadPassword -> throwError' err401
---  NoSuchUser -> throwError' err401
---  Indefinite -> throwError' err401
---  Authenticated user -> pure user
---
---protectedHandlers :: AuthResult LoggedInUser -> RestServer Protected
---protectedHandlers user = go
---  where
---    go = userGetHandler user
---        :<|> animeUpdateHandler user
---        :<|> animeListHandler user
---
---userGetHandler :: AuthResult LoggedInUser  -> Handler' User
---userGetHandler authUsr = do
---    LoggedInUser{..} <- authHelper authUsr
---    selectUser userId >>= maybeThrow err409 . fmap toUser
---  where
---    toUser Core.User{..} = User
---        { userId
---        , email
---        , name
---        , episodeChannel
---        }
---
---animeUpdateHandler :: AuthResult LoggedInUser  -> [PostAnimeFollow] -> Handler' NoContent
---animeUpdateHandler authUsr follows = do
---    LoggedInUser{..} <- authHelper authUsr
---    modifyUsersAnime $ fmap (toAnimeFollow userId) follows
---    pure NoContent
---  where
---    toAnimeFollow userId PostAnimeFollow{..} = Core.UserFollow
---        { userId
---        , animeId
---        , follow
---        }
---
---animeListHandler :: AuthResult LoggedInUser  -> Handler' [Anime]
---animeListHandler authUrs = do
---    LoggedInUser{..} <- authHelper authUrs
---    animeList <- listUserRelatedAnime userId
---    pure $ fmap toApiAnime animeList
---  where
---    toApiAnime Core.UserRelatedAnime{..} = Anime
---        { animeId
---        , title
---        , url = showT url
---        , imageUrl = showT imageUrl
---        , date
---        , following
---        }
---
---loginHandler :: Login -> Handler' (Headers '[Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
---loginHandler Login{..} = do
---    user <- selectUserByEmail email >>= maybe (throwError' err401) pure
---    case verifyPassword (encodeUtf8 password) $ user ^. #password  of
---        CryptoPassed v -> if v
---            then pure ()
---            else throwError' err401
---        -- TODO: Better logging???
---        CryptoFailed e -> do
---            send $ print e
---            throwError' err401
---    Context{..} <- ask
---
---    mApplyCookies <- send . acceptLogin cookiesSettings jwtSettings $ toLoggedInUser user
---    case mApplyCookies of
---      Nothing           -> throwError' err401
---      Just applyCookies -> pure $ applyCookies NoContent
---  where
---    toLoggedInUser :: Core.User -> LoggedInUser
---    toLoggedInUser Core.User{userId} = LoggedInUser {..}
---
---atomEpisodesGetHandler :: ChannelId -> Handler' Feed
---atomEpisodesGetHandler channelId = do
---    context <- ask
---    episodes <- listChannelEpisodes channelId
---
---    let lastModification = Nothing
---
---    pure . feedFromAtom . fd context lastModification
---        $ fmap toEntry episodes
---  where
---    fd :: Context -> Maybe UTCTime -> [Entry] -> Atom.Feed
---    fd Context{..} date entries = fd'
---        { feedLinks = [nullLink $ showT baseUri]
---        , feedEntries = entries
---        }
---      where
---          fd' = nullFeed (showT baseUri) (TextString "episode channel") . pack
---            $ maybe "" (formatTime defaultTimeLocale rfc822DateFormat) date
---
---    toEntry :: Core.Episode -> Entry
---    toEntry Core.Episode{..} = entry'
---        { entryLinks = [nullLink $ showT url]
---        , entrySummary = Just . HTMLString
---            $ "<div><a href=\"" <> showT url <> "\"><img src=\""
---            <> showT imageUrl <> "\"></div>"
---        }
---      where
---        entry' :: Entry
---        entry' = nullEntry (showT url)
---            (TextString $ title <> " [Episode: " <> number <> "]")
---            .  pack $ formatTime defaultTimeLocale rfc822DateFormat date
---
+maybeThrow :: Handler' es => ServerError -> Maybe a -> Eff es a
+maybeThrow e = \case
+    Nothing -> throwError e
+    Just v -> pure v
+
+authHelper :: (Handler' es) => AuthResult LoggedInUser -> Eff es LoggedInUser
+authHelper = \case
+  BadPassword -> throwError err401
+  NoSuchUser -> throwError err401
+  Indefinite -> throwError err401
+  Authenticated user -> pure user
+
+protectedHandlers :: (Handler' es, IOE :> es) => AuthResult LoggedInUser -> RestServer Protected es
+protectedHandlers user = go
+  where
+    go = userGetHandler user
+        :<|> animeUpdateHandler user
+        :<|> animeListHandler user
+
+userGetHandler :: (Handler' es) => AuthResult LoggedInUser  -> Eff es User
+userGetHandler authUsr = do
+    loggedInUser <- authHelper authUsr
+    getDbUserById loggedInUser.userId >>= maybeThrow err409 . fmap toUser
+  where
+    toUser Core.User{..} = User
+        { userId = id
+        , email
+        , name
+        , episodeChannel = newsChannel
+        }
+
+animeUpdateHandler :: (Handler' es, IOE :> es) => AuthResult LoggedInUser  -> [PostAnimeFollow] -> Eff es NoContent
+animeUpdateHandler authUsr follows = do
+    loggedInUser <- authHelper authUsr
+    let (inserts, deletes) = foldr (toInsertsDeletes loggedInUser.userId) ([], []) follows
+    mapM_ insertUserFollows inserts
+    mapM_ deleteUserFollows deletes
+    pure NoContent
+  where
+    toInsertsDeletes :: UserId -> PostAnimeFollow -> ([CreateUserFollows], [DeleteUserFollows]) -> ([CreateUserFollows], [DeleteUserFollows])
+    toInsertsDeletes userId e (xs, ys) = if e.follow
+      then (CreateUserFollows userId e.animeId : xs, ys)
+      else (xs, DeleteUserFollows userId e.animeId : ys)
+
+animeListHandler :: (Handler' es, IOE :> es) => AuthResult LoggedInUser  -> Eff es [Anime]
+animeListHandler authUrs = do
+    loggedInUser <- authHelper authUrs
+    animeList <- listUserRelatedAnime loggedInUser.userId
+    pure $ fmap toApiAnime animeList
+  where
+    toApiAnime Core.UserRelatedAnime{..} = Anime
+        { animeId
+        , title
+        , url = show url
+        , imageUrl = show imageUrl
+        , date
+        , following
+        }
+
+loginHandler :: (Handler' es, IOE :> es) => Login -> Eff es (Headers '[Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
+loginHandler Login{..} = do
+    user <- selectUserByEmail email >>= maybe (throwError err401) pure
+    case verifyPassword (encodeUtf8 password) . toPasswordHash $ user.password of
+        CryptoPassed v -> if v
+            then pure ()
+            else throwError err401
+        -- TODO: Better logging???
+        CryptoFailed e -> do
+            liftIO $ print e
+            throwError err401
+    Context{..} <- ask
+
+    mApplyCookies <- liftIO . acceptLogin cookiesSettings jwtSettings $ toLoggedInUser user
+    case mApplyCookies of
+      Nothing           -> throwError err401
+      Just applyCookies -> pure $ applyCookies NoContent
+  where
+    toLoggedInUser :: Core.User -> LoggedInUser
+    toLoggedInUser Core.User{id} = LoggedInUser id
+
+atomEpisodesGetHandler :: (Handler' es, IOE :> es) => ChannelId -> Eff es Feed
+atomEpisodesGetHandler channelId = do
+    context <- ask
+    episodes <- listEpisodesByChannelId channelId
+
+    let lastModification = Nothing
+
+    pure . feedFromAtom . fd context lastModification
+        $ fmap toEntry episodes
+  where
+    fd :: Context -> Maybe UTCTime -> [Entry] -> Atom.Feed
+    fd Context{..} date entries = fd'
+        { feedLinks = [nullLink $ show baseUri]
+        , feedEntries = entries
+        }
+      where
+          fd' = nullFeed (show baseUri) (TextString "episode channel") . pack
+            $ maybe "" (formatTime defaultTimeLocale rfc822DateFormat) date
+
+    toEntry :: Core.Episode -> Entry
+    toEntry Core.Episode{..} = entry'
+        { entryLinks = [nullLink $ show url]
+        , entrySummary = Just . HTMLString
+            $ "<div><a href=\"" <> show url <> "\"><img src=\""
+            <> show imageUrl <> "\"></div>"
+        }
+      where
+        entry' :: Entry
+        entry' = nullEntry (show url)
+            (TextString $ title <> " [Episode: " <> number <> "]")
+            .  pack $ formatTime defaultTimeLocale rfc822DateFormat date
+
 
 
 atomAnimeGetHandler :: (Handler' es, IOE :> es) => Eff es Feed
@@ -221,15 +221,6 @@ atomAnimeGetHandler = do
         entry' = nullEntry (show url)
             (TextString title)
             .  pack $ formatTime defaultTimeLocale rfc822DateFormat date
-
-atomEpisodesGetHandler :: ChannelId -> Eff es Feed
-atomEpisodesGetHandler = undefined
-
-loginHandler :: Login -> Eff es (Headers '[Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
-loginHandler = undefined
-
-protectedHandlers :: AuthResult LoggedInUser -> RestServer Protected es
-protectedHandlers = undefined
 
 apiHander :: (Handler' es, IOE :> es) => RestServer Api es
 apiHander = atomEpisodesGetHandler

@@ -7,11 +7,14 @@ module AnimeRss.DataModel.Types
   , User (..)
   , TemporaryKey (..)
   , Anime (..)
-  , UserFollows (..)
+  , CreateUserFollows (..)
+  , DeleteUserFollows (..)
   , Error (..)
   , unexpectedAmountOfResults
   , unexpectedAmountOfActions
   , DbPasswordHash(..)
+  , toPasswordHash
+  , UserRelatedAnime(..)
   )
 where
 
@@ -57,11 +60,11 @@ unexpectedAmountOfResults :: Text -> Int -> Int -> Int -> Error
 unexpectedAmountOfResults origin expectedMininumCount expectedMaximumCount count = UnexpectedAmountOfResults $ UnexpectedAmountOfResultsData {..}
 
 data Episode = Episode
-  { id :: EpisodeId
+  { title :: Text
   , url :: Url
   , number :: Text
+  , imageUrl :: Url
   , date :: UTCTime
-  , animeId :: AnimeId
   }
   deriving stock (Show, Generic)
   deriving anyclass (SQL.FromRow)
@@ -110,11 +113,15 @@ data Anime = Anime
   deriving stock (Show, Generic)
   deriving anyclass (SQL.FromRow)
 
-data UserFollows = UserFollows
+data CreateUserFollows = CreateUserFollows
   { userId :: UserId
   , animeId :: AnimeId
-  , url :: Text
-  , date :: UTCTime
+  }
+  deriving stock (Show, Generic)
+
+data DeleteUserFollows = DeleteUserFollows
+  { userId :: UserId
+  , animeId :: AnimeId
   }
   deriving stock (Show, Generic)
 
@@ -124,6 +131,9 @@ data DbPasswordHash = DbPasswordHash
   }
   deriving stock (Show, Generic)
   deriving anyclass (Serialize)
+
+toPasswordHash :: DbPasswordHash -> PasswordHash
+toPasswordHash DbPasswordHash{..} = (hashParameters, password)
 
 instance SQL.ToField DbPasswordHash where
   toField = SQL.toField . SQL.Binary . encode
@@ -135,3 +145,14 @@ instance SQL.FromField DbPasswordHash where
     where
       mkError :: String -> SQL.Conversion DbPasswordHash
       mkError = SQL.returnError SQL.ConversionFailed field
+
+data UserRelatedAnime = UserRelatedAnime
+    { animeId :: AnimeId
+    , title :: Text
+    , url :: Text
+    , imageUrl :: Text
+    , date :: UTCTime
+    , following :: Bool
+    }
+  deriving stock (Show, Generic)
+  deriving anyclass (SQL.FromRow)
