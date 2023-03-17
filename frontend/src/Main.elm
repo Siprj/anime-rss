@@ -35,7 +35,13 @@ updateWithStorage : Msg -> Model -> (Model, Cmd Msg)
 updateWithStorage msg model = case msg of
     FetchAnimeList -> Debug.log "FetchAnimeList" (model, Cmd.none)
 --    GotAnimeList (Result Http.Error (List Anime)) -> (model, Cmd.none)
-    GotAnimeList res -> case res of
+    GotAnimeList res -> Debug.log "kwa kwa kwa" (bla model res)
+    Logout ->  Debug.log "GotAnimeList3" (model, Cmd.none)
+    LogIn -> Debug.log "GotAnimeList4" (model, Cmd.none)
+    NoOp -> Debug.log "GotAnimeList5" (model, Cmd.none)
+
+bla : Model -> Result Http.Error (List Anime) -> (Model, Cmd Msg)
+bla model res = case res of
         Err err -> case err of
             Http.BadStatus v -> case v of
                 401 ->
@@ -43,9 +49,6 @@ updateWithStorage msg model = case msg of
                 _ -> Debug.log "GotAnimeList0" (model, Cmd.none)
             _ -> Debug.log "GotAnimeList1" (model, Cmd.none)
         Ok _ -> Debug.log "GotAnimeList2" (model, Cmd.none)
-    Logout ->  Debug.log "GotAnimeList3" (model, Cmd.none)
-    LogIn -> Debug.log "GotAnimeList4" (model, Cmd.none)
-    NoOp -> Debug.log "GotAnimeList5" (model, Cmd.none)
 
 type SubscriptionAction = Subscribe | Unsubscribe
 
@@ -77,10 +80,23 @@ type alias NavBarButton msg =
 
 viewNavBar : (List (NavBarElement Msg), List (NavBarElement Msg)) -> Html Msg
 viewNavBar (left, right) =
-    div [class "navbar"]
+    -- <nav>
+    --   <div class="nav-div">
+    --     <ul class="left-submenu">
+    --       <li><a href="#">Profile</a></li>
+    --       <li class="selected">Anime list</li>
+    --     </ul>
+    --     <ul class="right-submenu">
+    --       <li><a href="#">Logout</a></li>
+    --     </ul>
+    --   </div>
+    -- </nav>
+    node "nav" []
+      [ div [class "nav-div"]
         [ ul [class "left-submenu"] <| List.map viewNavBarElement left
         , ul [class "right-submenu"] <| List.map viewNavBarElement right
         ]
+      ]
 
 whenList : Bool -> a -> List a
 whenList condition v = if condition
@@ -90,8 +106,9 @@ whenList condition v = if condition
 viewNavBarElement : NavBarElement msg -> Html msg
 viewNavBarElement nbe =
     case nbe of
-        Link nbl -> li (whenList nbl.selected (class "navbar-selected"))
-            [a [href nbl.link] [text nbl.text]]
+        Link nbl -> if nbl.selected
+            then li (whenList nbl.selected (class "selected")) [text nbl.text]
+            else li [] [a [href nbl.link] [text nbl.text]]
         Button nbb -> li [] [div [onClick nbb.msg] [text nbb.text]]
 
 type Route =
@@ -137,6 +154,11 @@ type alias Model =
     , page : Page
     }
 
+type alias LoginInfo =
+    { bal : String
+    , kwa : String
+    }
+
 type alias Profile =
     { email : String
     , newAnimeChannel : String
@@ -164,7 +186,7 @@ animeDecode = D.list <| D.map3 Anime
 
 fetchAnimeListCmd : Cmd Msg
 fetchAnimeListCmd = Http.get
-    { url = "/animes"
+    { url = "api/animes"
     , expect = Http.expectJson GotAnimeList animeDecode
     }
 
@@ -184,7 +206,7 @@ emptyModel =
 init : Value -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ _ _=
   ( emptyModel
-  , Cmd.none --fetchAnimeListCmd
+  , fetchAnimeListCmd
   )
 
 
@@ -212,11 +234,16 @@ viewLoadingPage =
     -- Loader downloaded from here: https://icons8.com/preloaders
     [div [class "loading"] [img [src "/loading.png"] []]]
 
+loginPage : Model -> List (Html Msg)
+loginPage model =
+        [ viewNavBar (leftNav, rightNav)
+        ]
+
 view : Model -> List (Html Msg)
 view model = case model.page of
     LoadingPage -> viewLoadingPage
     ProfilePage ->
         [ viewNavBar (leftNav, rightNav)
         ]
-    LoginPage -> []
+    LoginPage -> loginPage model
     AnimeListPage -> []

@@ -4,6 +4,7 @@
     "elm": "*",
     "elm-format": "^0.8.5",
     "elm-test": "*",
-    "node": "^15.12.0"
+    "node": "^15.12.0",
+    "broken-link-checker": "^0.7.8"
   }
 }

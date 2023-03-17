@@ -141,6 +141,23 @@ button:disabled {
   cursor: default;
 }
 
+.button-input {
+  font-size: 1.1em;
+  margin: 0.2em 0.2em;
+  border: 0.15em;
+  border-style: solid;
+  border-radius: 1em;
+  padding-left: 1em;
+  padding-right: 1em;
+  border-color: var(--text-secondary-color);
+  color: var(--text-secondary-color);
+  text-decoration: none;
+  display: inline-block;
+  cursor: pointer;
+  background-color: var(--bg-color);
+  outline: none;
+}
+
 img {
   display:inline-block;
   width: auto;
