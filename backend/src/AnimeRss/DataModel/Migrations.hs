@@ -1,21 +1,23 @@
 {-# LANGUAGE QuasiQuotes #-}
 
-module AnimeRss.DataModel.Migrations
-  (migrateAll
-  , initTemporaryKeysTableChange)
-where
+module AnimeRss.DataModel.Migrations (
+  migrateAll,
+  initTemporaryKeysTableChange,
+) where
 
-import Relude hiding (id)
+import Control.Monad.Catch
+import Database.PostgreSQL.Simple
 import Database.PostgreSQL.Simple.SqlQQ (sql)
 import Drifter (Change (Change, changeDependencies, changeDescription, changeMethod, changeName), ChangeName (ChangeName, changeNameText))
 import Drifter.PostgreSQL (Method (MigrationQuery), PGMigration, runMigrations)
-import Database.PostgreSQL.Simple
-import Control.Monad.Catch
-import Prelude (Show(show))
+import Relude hiding (id)
+import Prelude (Show (show))
 
 newtype MigrationError = MigrationError String
+
 instance Show MigrationError where
   show (MigrationError str) = str
+
 instance Exception MigrationError
 
 migrateAll :: Connection -> IO ()
@@ -25,13 +27,13 @@ migrateAll connection = runMigrations connection migrationList >>= either (throw
       [ enableUUIDChange
       , initEpisodesTableChange
       , initUsersTableChange
---      , initTemporaryKeysTableChange
-      , initAnimesTableChange
+      , --      , initTemporaryKeysTableChange
+        initAnimesTableChange
       , initUserFollowsTableChange
       ]
 
 enableUUIDMigrationName :: ChangeName
-enableUUIDMigrationName = ChangeName { changeNameText = "enable_uuid" }
+enableUUIDMigrationName = ChangeName {changeNameText = "enable_uuid"}
 
 enableUUIDChange :: Change PGMigration
 enableUUIDChange =

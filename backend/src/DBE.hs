@@ -1,40 +1,45 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TypeFamilies #-}
 
-module DBE
-  ( PostgreSql
-  , query
-  , query_
-  , queryWith
-  , queryWith_
-  , returning
-  , execute
-  , execute_
-  , executeMany
-  , beginMode
-  , commit
-  , rollback
-  , withTransactionMode
-  , withTransaction
-  , begin
-  , runDBE
-  , runDBESingle
-  , createConnectionPool
-  )
-where
+module DBE (
+  PostgreSql,
+  query,
+  query_,
+  queryWith,
+  queryWith_,
+  returning,
+  execute,
+  execute_,
+  executeMany,
+  beginMode,
+  commit,
+  rollback,
+  withTransactionMode,
+  withTransaction,
+  begin,
+  runDBE,
+  runDBESingle,
+  createConnectionPool,
+) where
 
-import qualified Database.PostgreSQL.Simple as SQL
-import qualified Database.PostgreSQL.Simple.FromRow as SQL
-import qualified Database.PostgreSQL.Simple.Transaction as SQL
-import Effectful
-    ( type (:>), Effect, Dispatch(Dynamic), DispatchOf, Eff, IOE )
-import Relude ( ($), Int64 )
-import Effectful.Dispatch.Dynamic (send, LocalEnv, reinterpret, localSeqUnlift)
-import qualified DBE.Static as S
-import Data.Pool ( Pool )
 import DBE.Static (createConnectionPool)
+import DBE.Static qualified as S
+import Data.Pool (Pool)
+import Database.PostgreSQL.Simple qualified as SQL
+import Database.PostgreSQL.Simple.FromRow qualified as SQL
+import Database.PostgreSQL.Simple.Transaction qualified as SQL
+import Effectful (
+  Dispatch (Dynamic),
+  DispatchOf,
+  Eff,
+  Effect,
+  IOE,
+  type (:>),
+ )
+import Effectful.Dispatch.Dynamic (LocalEnv, localSeqUnlift, reinterpret, send)
+import Relude (Int64, ($))
 
 data PostgreSql :: Effect where
   Query :: (SQL.ToRow q, SQL.FromRow r) => SQL.Query -> q -> PostgreSql m [r]
@@ -114,4 +119,3 @@ localDBE env = \case
   Commit -> S.commit
   Rollback -> S.rollback
   WithTransactionMode transactionMode eff -> localSeqUnlift env $ \unlift -> S.withTransactionMode transactionMode (unlift eff)
-

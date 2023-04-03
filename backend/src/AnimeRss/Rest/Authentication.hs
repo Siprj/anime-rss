@@ -3,18 +3,17 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module AnimeRss.Rest.Authentication
-    ( UserAuthentication
-    )
-  where
+module AnimeRss.Rest.Authentication (
+  UserAuthentication,
+) where
 
+import AnimeRss.DataModel.Types (User)
 import Servant.API (AuthProtect)
 import Servant.Server.Experimental.Auth (AuthServerData)
-import AnimeRss.DataModel.Types (User)
 
 type instance AuthServerData (AuthProtect "cookie-auth") = User
 

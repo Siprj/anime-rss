@@ -1,13 +1,12 @@
-module AnimeRss.Url
-  ( Url (..)
-  , fromUrl
-  )
-where
+module AnimeRss.Url (
+  Url (..),
+  fromUrl,
+) where
 
-import Relude
-import qualified Database.PostgreSQL.Simple.FromField as SQL
-import qualified Database.PostgreSQL.Simple.ToField as SQL
+import Database.PostgreSQL.Simple.FromField qualified as SQL
+import Database.PostgreSQL.Simple.ToField qualified as SQL
 import Network.URI
+import Relude
 
 newtype Url = Url URI
   deriving stock (Eq, Generic)

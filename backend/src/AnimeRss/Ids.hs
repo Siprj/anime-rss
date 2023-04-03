@@ -1,20 +1,19 @@
-module AnimeRss.Ids
-  ( IdKind (..)
-  , Id
-  , unsafeId
-  , fromId
-  , AnimeId
-  , EpisodeId
-  , UserId
-  , TemporaryKeyId
-  )
-where
+module AnimeRss.Ids (
+  IdKind (..),
+  Id,
+  unsafeId,
+  fromId,
+  AnimeId,
+  EpisodeId,
+  UserId,
+  TemporaryKeyId,
+) where
 
-import Relude hiding (toText)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.UUID (UUID, fromText, toText)
-import qualified Database.PostgreSQL.Simple.FromField as SQL
-import qualified Database.PostgreSQL.Simple.ToField as SQL
+import Database.PostgreSQL.Simple.FromField qualified as SQL
+import Database.PostgreSQL.Simple.ToField qualified as SQL
+import Relude hiding (toText)
 
 data IdKind
   = Anime

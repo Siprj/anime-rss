@@ -1,32 +1,31 @@
 {-# LANGUAGE QuasiQuotes #-}
 
-module AnimeRss.DataModel.Queries
-  ( insertDbUser
-  , getDbUserById
-  , listDbUsers
-  , deleteDbUser
-  , insertEpisode
-  , listAnimes
-  , selectUserByEmail
-  , listEpisodesByChannelId
-  , insertUserFollows
-  , deleteUserFollows
-  , listUserRelatedAnime
-  )
-where
+module AnimeRss.DataModel.Queries (
+  insertDbUser,
+  getDbUserById,
+  listDbUsers,
+  deleteDbUser,
+  insertEpisode,
+  listAnimes,
+  selectUserByEmail,
+  listEpisodesByChannelId,
+  insertUserFollows,
+  deleteUserFollows,
+  listUserRelatedAnime,
+) where
 
 import AnimeRss.DataModel.Types
 import AnimeRss.Ids
-import AnimeRss.Rest.Api (SubParam(..))
+import AnimeRss.Rest.Api (SubParam (..))
 import Control.Monad.Catch
 import DBE
-import qualified Database.PostgreSQL.Simple as SQL
+import Data.List hiding (null)
+import Data.Text (null)
+import Data.UUID (UUID)
+import Database.PostgreSQL.Simple qualified as SQL
 import Database.PostgreSQL.Simple.SqlQQ (sql)
 import Effectful
-import Relude hiding (null, All, head, id)
-import Data.List hiding (null)
-import Data.UUID (UUID)
-import Data.Text (null)
+import Relude hiding (All, head, id, null)
 
 expecOneOrZeroResults :: Text -> [a] -> Eff es (Maybe a)
 expecOneOrZeroResults origin values = do
@@ -101,14 +100,15 @@ listDbUsers = do
 
 deleteDbUser :: (PostgreSql :> es) => UserId -> Eff es ()
 deleteDbUser userId = do
-  ret <- execute
-    [sql| DELETE FROM users WHERE id = ?
+  ret <-
+    execute
+      [sql| DELETE FROM users WHERE id = ?
     |]
-    (SQL.Only userId)
+      (SQL.Only userId)
   expectOneAction "deleteDBUsers" ret
 
 insertEpisode :: (PostgreSql :> es, IOE :> es) => CreateEpisode -> Eff es ()
-insertEpisode CreateEpisode{..} = do
+insertEpisode CreateEpisode {..} = do
   -- TODO: Add logging
   liftIO $ putStrLn "inserting anime"
   ret <-
@@ -144,7 +144,7 @@ listAnimes = do
   -- TODO: Add logging
   liftIO $ putStrLn "listAnimes"
   query_
-      [sql| SELECT
+    [sql| SELECT
         id,
         title,
         image_url,
@@ -183,7 +183,7 @@ listEpisodesByChannelId channelId = do
       (SQL.Only channelId)
   userId <- expectOneResult @(SQL.Only UUID) "selectUserIdByChannelId" ret
   query
-      [sql| SELECT
+    [sql| SELECT
         a.title,
         e.url,
         e.number,
@@ -201,7 +201,7 @@ listEpisodesByChannelId channelId = do
     userId
 
 insertUserFollows :: (PostgreSql :> es, IOE :> es) => CreateUserFollows -> Eff es ()
-insertUserFollows CreateUserFollows{..} = do
+insertUserFollows CreateUserFollows {..} = do
   liftIO $ putStrLn "insertUserFollows"
   void $
     execute
@@ -215,12 +215,13 @@ insertUserFollows CreateUserFollows{..} = do
       (animeId, userId)
 
 deleteUserFollows :: (PostgreSql :> es, IOE :> es) => DeleteUserFollows -> Eff es ()
-deleteUserFollows DeleteUserFollows{..} = do
+deleteUserFollows DeleteUserFollows {..} = do
   liftIO $ putStrLn "deleteUserFollows"
-  void $ execute
-    [sql| DELETE FROM user_follows WHERE user_id = ? AND anime_id = ?
+  void $
+    execute
+      [sql| DELETE FROM user_follows WHERE user_id = ? AND anime_id = ?
     |]
-    (userId, animeId)
+      (userId, animeId)
 
 listUserRelatedAnime :: (PostgreSql :> es, IOE :> es) => UserId -> SubParam -> Maybe Text -> Eff es [UserRelatedAnime]
 listUserRelatedAnime userId subParam mSearch = do
@@ -246,25 +247,34 @@ listUserRelatedAnime userId subParam mSearch = do
 
     order = [sql| ORDER BY a.date |]
     fromJoin = case subParam of
-      All -> [sql|
+      All ->
+        [sql|
         FROM animes a
         LEFT OUTER JOIN (select anime_id from user_follows where user_id = ?) as uf
         ON a.id = uf.anime_id
-        |] <> maybe "" (const " WHERE ") mNormalizedSearch <> like
-      Subscribed -> [sql|
+        |]
+          <> maybe "" (const " WHERE ") mNormalizedSearch
+          <> like
+      Subscribed ->
+        [sql|
         FROM animes a
         LEFT JOIN user_follows uf
         ON a.id = uf.anime_id
         WHERE user_id = ?
-        |] <> maybe "" (const " AND ") mNormalizedSearch <> like
-      Unsubscribed -> [sql|
+        |]
+          <> maybe "" (const " AND ") mNormalizedSearch
+          <> like
+      Unsubscribed ->
+        [sql|
         FROM animes a
         WHERE NOT EXISTS (
           SELECT NULL
           FROM user_follows uf
           WHERE uf.user_id = ? AND a.id = uf.anime_id
         )
-        |] <> maybe "" (const " AND ") mNormalizedSearch <> like
+        |]
+          <> maybe "" (const " AND ") mNormalizedSearch
+          <> like
     like = case mNormalizedSearch of
       Nothing -> ""
       Just _ -> [sql| LOWER (a.title) LIKE '%' || LOWER(?) || '%' |]

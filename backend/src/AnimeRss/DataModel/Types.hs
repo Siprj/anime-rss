@@ -1,34 +1,33 @@
 {-# LANGUAGE DeriveAnyClass #-}
 
-module AnimeRss.DataModel.Types
-  ( Episode (..)
-  , CreateEpisode (..)
-  , CreateUser (..)
-  , User (..)
-  , TemporaryKey (..)
-  , Anime (..)
-  , CreateUserFollows (..)
-  , DeleteUserFollows (..)
-  , Error (..)
-  , unexpectedAmountOfResults
-  , unexpectedAmountOfActions
-  , DbPasswordHash(..)
-  , toPasswordHash
-  , UserRelatedAnime(..)
-  )
-where
+module AnimeRss.DataModel.Types (
+  Episode (..),
+  CreateEpisode (..),
+  CreateUser (..),
+  User (..),
+  TemporaryKey (..),
+  Anime (..),
+  CreateUserFollows (..),
+  DeleteUserFollows (..),
+  Error (..),
+  unexpectedAmountOfResults,
+  unexpectedAmountOfActions,
+  DbPasswordHash (..),
+  toPasswordHash,
+  UserRelatedAnime (..),
+) where
 
 import AnimeRss.Ids
 import AnimeRss.Url
 import Control.Exception
+import Crypto.PasswordStore
+import Data.Serialize
 import Data.Time (UTCTime)
 import Data.UUID (UUID)
-import qualified Database.PostgreSQL.Simple as SQL
+import Database.PostgreSQL.Simple qualified as SQL
+import Database.PostgreSQL.Simple.FromField qualified as SQL hiding (Binary)
+import Database.PostgreSQL.Simple.ToField qualified as SQL
 import Relude hiding (id)
-import Crypto.PasswordStore
-import qualified Database.PostgreSQL.Simple.ToField as SQL
-import Data.Serialize
-import qualified Database.PostgreSQL.Simple.FromField as SQL hiding (Binary)
 
 data Error
   = UnexpectedAmountOfActions UnexpectedAmountOfActionsData
@@ -133,26 +132,27 @@ data DbPasswordHash = DbPasswordHash
   deriving anyclass (Serialize)
 
 toPasswordHash :: DbPasswordHash -> PasswordHash
-toPasswordHash DbPasswordHash{..} = (hashParameters, password)
+toPasswordHash DbPasswordHash {..} = (hashParameters, password)
 
 instance SQL.ToField DbPasswordHash where
   toField = SQL.toField . SQL.Binary . encode
 
 instance SQL.FromField DbPasswordHash where
   fromField :: SQL.FieldParser DbPasswordHash
-  fromField field mdata = SQL.fromField field mdata
-    >>= (either mkError pure . decode . SQL.fromBinary)
+  fromField field mdata =
+    SQL.fromField field mdata
+      >>= (either mkError pure . decode . SQL.fromBinary)
     where
       mkError :: String -> SQL.Conversion DbPasswordHash
       mkError = SQL.returnError SQL.ConversionFailed field
 
 data UserRelatedAnime = UserRelatedAnime
-    { animeId :: AnimeId
-    , title :: Text
-    , url :: Text
-    , imageUrl :: Text
-    , date :: UTCTime
-    , following :: Bool
-    }
+  { animeId :: AnimeId
+  , title :: Text
+  , url :: Text
+  , imageUrl :: Text
+  , date :: UTCTime
+  , following :: Bool
+  }
   deriving stock (Show, Generic)
   deriving anyclass (SQL.FromRow)
