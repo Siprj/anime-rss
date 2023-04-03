@@ -6,6 +6,9 @@
       kwa kwa
     </title>
     <link rel="stylesheet" href="style.css">
+    <link href="css/fontawesome.css" rel="stylesheet">
+    <link href="css/brands.css" rel="stylesheet">
+    <link href="css/solid.css" rel="stylesheet">
   </head>
   <body>
     <nav>
@@ -23,10 +26,28 @@
       <div class="content">
         <div class="filter-header">
         <!-- <a class="filter-item selected" href="#"><div class="selected"> kwa </div></a> --!>
-          <button type="button selected" disabled>all</button>
-          <button type="button">asdf</button>
-          <input class="button-input" type="text" value="test value">
+          <button type="button selected" disabled>All</button>
+          <button type="button">Subscribed</button>
+          <button type="button">Unsubscribed</button>
+          <div class="search">
+            <input class="button-input" type="text" placeholder="Search">
+            <i class="fa-sharp fa-solid fa-magnifying-glass"></i>
+          </div>
         </div>
+
+        <div class="search">
+          <i class="fa-sharp fa-solid fa-lock"></i>
+          <input type="text" class="button-input" placeholder="Password">
+        </div>
+
+        <div class="field-container">
+          <input id="field-input=1" type="text" class="field-input" placeholder=" ">
+          <!--  <input id="field-input=1" type="text" class="field-input" placeholder="foo"> --!>
+          <div class="field-label">
+            <label for="field-input-1" class="field-label-content">Something</label>
+          </div>
+        </div>
+
         <div class="list-content">
           <div class="anime-list-row">
             <img src="https://gogocdn.net/cover/sabiiro-no-armor-reimei.png"> 

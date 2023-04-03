@@ -2,10 +2,11 @@
   --bg-color: #1f222a;
   --text-secondary-color: #74c76b;
   --text-color: #fff;
+  --text-input-bg-color: hsl(224, 15%, 7%);
   --hover-text-color: hsl(114, 96%, 95%);
   --page-max-width: 900px;
-  --navbar-height: 3em;
-  --list-general-margine: 0.5em;
+  --navbar-height: 3rem;
+  --list-general-margine: 0.5rem;
 }
 
 body {
@@ -48,12 +49,12 @@ nav .left-submenu {
 
 nav .right-submenu li,
 nav .left-submenu li {
+  font-size: 1.2rem;
   display: inline-block;
   list-style-type: none;
   padding: 0.2em 0.4em;
   color: var(--text-secondary-color);
   font-weight: bold;
-  font-size: 1.2em;
   white-space: nowrap;
 }
 
@@ -103,7 +104,7 @@ nav li:hover a {
 }
 
 .content {
-  padding-top: 0.5em;
+  padding-top: 0.5rem;
   width: 100%;
   max-width: var(--page-max-width);
 }
@@ -115,7 +116,7 @@ nav li:hover a {
 }
 
 button {
-  font-size: 1.1em;
+  font-size: 1.1rem;
   margin: 0.2em 0.2em;
   border: 0.15em;
   border-style: solid;
@@ -142,12 +143,26 @@ button:disabled {
 }
 
 .button-input {
-  font-size: 1.1em;
+  font-size: 1.1rem;
+  border-style: none;
+  padding-top: 0px;
+  padding-bottom: 0px;
+  border-color: var(--text-secondary-color);
+  color: var(--text-secondary-color);
+  text-decoration: none;
+  display: inline-block;
+  cursor: pointer;
+  background-color: var(--text-input-bg-color);
+  outline: none;
+}
+
+.search {
+  font-size: 1.1rem;
   margin: 0.2em 0.2em;
   border: 0.15em;
   border-style: solid;
   border-radius: 1em;
-  padding-left: 1em;
+  padding-left: 0.8em;
   padding-right: 1em;
   border-color: var(--text-secondary-color);
   color: var(--text-secondary-color);
@@ -156,6 +171,7 @@ button:disabled {
   cursor: pointer;
   background-color: var(--bg-color);
   outline: none;
+  background-color: var(--text-input-bg-color);
 }
 
 img {
@@ -229,4 +245,61 @@ input.skewed-subscribe-checkbox:checked+label div{
 .anime-list-row .title {
   font-weight: bold;
   padding-bottom: var(--list-general-margine);
+}
+
+.test {
+  border-color: var(--text-secondary-color);
+  color: var(--text-secondary-color);
+}
+
+.field-container {
+  color: var(--text-secondary-color);
+  position: relative;
+  display: inline-block;
+  border: 0px;
+  border-bottom: 0.15em;
+  border-style: solid;
+}
+
+.field-input {
+  padding: 1rem 0.5rem 0rem 0.5rem;
+  color: var(--text-color);
+  outline: none;
+  border: 0px;
+/*  background-color: var(--text-input-bg-color); */
+  background-color: var(--text-input-bg-color); */
+/*  background-color: var(--bg-color);*/
+  text-decoration: none;
+  padding-top: 1.5rem;
+  font-size: 1.1rem;
+}
+
+.field-label {
+  top: 0.8em;
+  left: 0.5em;
+  position: absolute;
+/*  background-color: var(--bg-color); */
+  cursor: text;
+  transition: all 0.2s ease;
+}
+
+.field-label-content {
+  font-size: 1.0rem;
+  transition: all 0.2s ease;
+}
+
+.field-input:focus + div {
+  top: 0.25em;
+}
+
+.field-input:focus + div .field-label-content {
+  font-size: 0.8rem;
+}
+
+.field-input:not(:placeholder-shown) + div {
+  top: 0.25em;
+}
+
+.field-input:not(:placeholder-shown) + div .field-label-content {
+  font-size: 0.8rem;
 }
