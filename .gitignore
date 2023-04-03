@@ -2,3 +2,5 @@
 dist-newstyle/
 elm-stuff/
 node_modules/
+.env
+elm.js

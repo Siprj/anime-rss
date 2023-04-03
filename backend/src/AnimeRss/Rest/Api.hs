@@ -26,23 +26,29 @@ module AnimeRss.Rest.Api
     , User(..)
     , ChannelId
     , LoggedInUser(..)
+    , SubParam(..)
     )
   where
 
 import AnimeRss.Ids (UserId, AnimeId)
 import Data.Bool (Bool)
 import Data.Eq (Eq)
-import Data.Text (Text)
+import Data.Text (Text, unpack, pack)
+import Data.Semigroup ((<>))
+import Data.Maybe (maybe)
+import Data.Function ((.), ($))
+import Data.Either (Either(Right, Left))
 import Data.Time (UTCTime)
 import Data.UUID (UUID)
 import GHC.Generics (Generic)
 import Optics (makeFieldLabelsWith, noPrefixFieldLabels)
 import AnimeRss.Rest.AtomMime (AtomFeed)
-import Servant.API (Header, Headers, Capture, ReqBody, (:<|>), (:>), Get, JSON, Post)
+import Servant.API (Header, Headers, Capture, ReqBody, (:<|>), (:>), Get, JSON, Post, QueryParam, FromHttpApiData(..), ToHttpApiData(..))
 import Text.Feed.Types (Feed)
-import Text.Show (Show)
+import Text.Show (Show, show)
+import Text.Read (Read, readMaybe)
 import Servant (NoContent, Verb, StdMethod (POST))
-import Data.Aeson (ToJSON, FromJSON, toEncoding, genericToEncoding, defaultOptions)
+import Data.Aeson (ToJSON, FromJSON, parseJSON, toEncoding, genericToEncoding, defaultOptions, genericParseJSON)
 import Servant.Auth.Server (SetCookie, Auth, Cookie, ToJWT, FromJWT)
 
 type Email = Text
@@ -81,7 +87,8 @@ data Login = Login
 makeFieldLabelsWith noPrefixFieldLabels ''Login
 instance ToJSON Login where
     toEncoding = genericToEncoding defaultOptions
-instance FromJSON Login
+instance FromJSON Login where
+    parseJSON = genericParseJSON defaultOptions
 
 data Anime = Anime
     { animeId :: AnimeId
@@ -96,7 +103,8 @@ data Anime = Anime
 makeFieldLabelsWith noPrefixFieldLabels ''Anime
 instance ToJSON Anime where
     toEncoding = genericToEncoding defaultOptions
-instance FromJSON Anime
+instance FromJSON Anime where
+    parseJSON = genericParseJSON defaultOptions
 
 data PostAnimeFollow = PostAnimeFollow
     { animeId :: AnimeId
@@ -107,12 +115,27 @@ data PostAnimeFollow = PostAnimeFollow
 makeFieldLabelsWith noPrefixFieldLabels ''PostAnimeFollow
 instance ToJSON PostAnimeFollow where
     toEncoding = genericToEncoding defaultOptions
-instance FromJSON PostAnimeFollow
+instance FromJSON PostAnimeFollow where
+    parseJSON = genericParseJSON defaultOptions
+
+data SubParam
+    = All
+    | Subscribed
+    | Unsubscribed
+  deriving stock (Show, Read, Eq, Generic)
+
+instance ToHttpApiData SubParam where
+  toUrlPiece = pack . show
+  toQueryParam = pack . show
+
+instance FromHttpApiData SubParam where
+  parseUrlPiece t = maybe (Left $ "Expected values \"All\", \"Subscribed\", \"Unsubscribed\"; received: " <> t) Right . readMaybe $ unpack t
+  parseQueryParam t = maybe (Left $ "Expected values \"All\", \"Subscribed\", \"Unsubscribed\"; received: " <> t) Right . readMaybe $ unpack t
 
 type Protected
     = "user" :> Get '[JSON] User
-    :<|> "follow" :> "anime" :> ReqBody '[JSON] [PostAnimeFollow] :> Verb 'POST 204 '[JSON] NoContent
-    :<|> "animes" :> Get '[JSON] [Anime]
+    :<|> "follow" :> "anime" :> ReqBody '[JSON] PostAnimeFollow :> Verb 'POST 204 '[JSON] NoContent
+    :<|> "animes" :> QueryParam "sub" SubParam :>  QueryParam "search" Text :> Get '[JSON] [Anime]
 
 type Api = "atom" :> "episodes" :> Capture "channel-id" ChannelId :> Get '[AtomFeed] Feed
     :<|> "atom" :> "animes" :> Get '[AtomFeed] Feed

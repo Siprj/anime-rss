@@ -17,23 +17,16 @@ where
 
 import AnimeRss.DataModel.Types
 import AnimeRss.Ids
+import AnimeRss.Rest.Api (SubParam(..))
 import Control.Monad.Catch
 import DBE
 import qualified Database.PostgreSQL.Simple as SQL
 import Database.PostgreSQL.Simple.SqlQQ (sql)
 import Effectful
-import Relude hiding (head, id)
-import Data.List
+import Relude hiding (null, All, head, id)
+import Data.List hiding (null)
 import Data.UUID (UUID)
--- import Relude.Unsafe (head)
---
--- expecOneResult :: Text -> [a] -> Eff es a
--- expecOneResult origin values = do
---   let len = length values
---   let err = unexpectedAmountOfResults origin 1 1 $ len
---   if len == 1
---     then pure $ head values
---     else throwM err
+import Data.Text (null)
 
 expecOneOrZeroResults :: Text -> [a] -> Eff es (Maybe a)
 expecOneOrZeroResults origin values = do
@@ -86,8 +79,8 @@ getDbUserById userId = do
         id,
         name,
         email,
-        news_channel,
-        password
+        password,
+        news_channel
     FROM users
     WHERE id = ?
     |]
@@ -169,8 +162,8 @@ selectUserByEmail email = do
         id,
         name,
         email,
-        news_channel,
-        password
+        password,
+        news_channel
     FROM users
     WHERE email = ?
     |]
@@ -217,30 +210,64 @@ insertUserFollows CreateUserFollows{..} = do
         user_id
     )
     VALUES (?,?)
+    ON CONFLICT DO NOTHING
     |]
       (animeId, userId)
 
 deleteUserFollows :: (PostgreSql :> es, IOE :> es) => DeleteUserFollows -> Eff es ()
 deleteUserFollows DeleteUserFollows{..} = do
-  liftIO $ putStrLn "insertUserFollows"
+  liftIO $ putStrLn "deleteUserFollows"
   void $ execute
     [sql| DELETE FROM user_follows WHERE user_id = ? AND anime_id = ?
     |]
     (userId, animeId)
 
-listUserRelatedAnime :: (PostgreSql :> es, IOE :> es) => UserId -> Eff es [UserRelatedAnime]
-listUserRelatedAnime userId = do
+listUserRelatedAnime :: (PostgreSql :> es, IOE :> es) => UserId -> SubParam -> Maybe Text -> Eff es [UserRelatedAnime]
+listUserRelatedAnime userId subParam mSearch = do
   liftIO $ putStrLn "listUserRelatedAnime"
-  query
+  liftIO $ print select
+  case mSearch of
+    Just search -> query select (userId, search)
+    Nothing -> query select (SQL.Only userId)
+  where
+    select = animeSelector <> " " <> followingSelector <> " " <> fromJoin <> " " <> order
+    animeSelector =
       [sql| SELECT
         a.id,
         a.title,
         a.url,
         a.image_url,
         a.date,
-        CASE WHEN uf.anime_id IS NULL THEN false ELSE true END AS following
-    FROM anime a
-    LEFT JOIN user_follows uf ON a.id = uf.anime_idg
-    WHERE uf.user_id = ?
-    |]
-      (SQL.Only userId)
+      |]
+    followingSelector = case subParam of
+      All -> [sql| CASE WHEN uf.anime_id IS NULL THEN false ELSE true END AS following |]
+      Subscribed -> [sql| True |]
+      Unsubscribed -> [sql| False |]
+
+    order = [sql| ORDER BY a.date |]
+    fromJoin = case subParam of
+      All -> [sql|
+        FROM animes a
+        LEFT OUTER JOIN (select anime_id from user_follows where user_id = ?) as uf
+        ON a.id = uf.anime_id
+        |] <> maybe "" (const " WHERE ") mNormalizedSearch <> like
+      Subscribed -> [sql|
+        FROM animes a
+        LEFT JOIN user_follows uf
+        ON a.id = uf.anime_id
+        WHERE user_id = ?
+        |] <> maybe "" (const " AND ") mNormalizedSearch <> like
+      Unsubscribed -> [sql|
+        FROM animes a
+        WHERE NOT EXISTS (
+          SELECT NULL
+          FROM user_follows uf
+          WHERE uf.user_id = ? AND a.id = uf.anime_id
+        )
+        |] <> maybe "" (const " AND ") mNormalizedSearch <> like
+    like = case mNormalizedSearch of
+      Nothing -> ""
+      Just _ -> [sql| LOWER (a.title) LIKE '%' || LOWER(?) || '%' |]
+    mNormalizedSearch = case mSearch of
+      Just v -> if null v then Nothing else Just v
+      Nothing -> Nothing

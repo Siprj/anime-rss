@@ -8,7 +8,7 @@ declare CREATE=true
 # Get the git root and move to the docker directory, so we don't have to provide
 # `-f` parameter to docker compose.
 source="$(git rev-parse --show-toplevel)"
-cd "$source/docker/"
+cd "$source/"
 
 function print_help() {
 cat << EOF

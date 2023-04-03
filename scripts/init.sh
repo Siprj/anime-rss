@@ -14,7 +14,7 @@ fi
 # parameter to `docker compose`.
 export DOCKER_BUILDKIT=1
 source="$(git rev-parse --show-toplevel)"
-cd "$source/docker/"
+cd "$source/"
 
 function print_help() {
 cat << EOF
@@ -47,7 +47,7 @@ do
 done
 
 # Generate the necessary environment variables for docker compose.
-cat <<EOF > "${source}/docker/.env"
+cat <<EOF > "${source}/.env"
 UID=$UID
 SOURCE_DIRECTORY=$source
 COMPOSE_PROJECT_NAME=anime-rss
@@ -57,5 +57,5 @@ EOF
 # Initialize the databases.
 ./scripts/manage-database.sh --recreate
 
-docker compose build devel
-docker compose up -d devel
+docker compose build --progress plain anime-rss-devel
+docker compose up -d anime-rss-devel

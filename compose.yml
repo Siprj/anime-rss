@@ -17,25 +17,25 @@ services:
   nginx:
     image: nginx:1.21.6
     ports:
-      - 127.0.0.1:8888:8888
+      - 127.0.0.1:8880:8888
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${SOURCE_DIRECTORY}/docker/nginx.conf:/etc/nginx/nginx.conf:ro
       - ${SOURCE_DIRECTORY}/frontend:/frontend:ro
       - tmp-nginx:/tmp/nginx/
 
-  devel:
+  anime-rss-devel:
     image: $USER-devel
     build:
-      dockerfile: Dockerfile
-      target: devel
+      dockerfile: docker/Dockerfile
+      target: anime-rss-devel
       args:
         - USER=$USER
         # UID is a bash variable, not an environment variable. Make sure to define it
         # explicitly before building the image or use the .env file.
         - UID=${UID:-1000}
-    working_dir: /home/$USER/repository
+    working_dir: $SOURCE_DIRECTORY
     volumes:
-      - $SOURCE_DIRECTORY:/home/$USER/repository
+      - $SOURCE_DIRECTORY:$SOURCE_DIRECTORY
       - home-data:/home/$USER/
       - $HOME/.ssh/:/home/$USER/.ssh:ro
       - ${SSH_AUTH_SOCK:-/tmp/no-auth}:${SSH_AUTH_SOCK:-/tmp/no-auth}

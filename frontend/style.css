@@ -6,6 +6,8 @@
   --page-max-width: 900px;
   --navbar-height: 3em;
   --list-general-margine: 0.5em;
+  --error-color: red;
+  --hyper-link-color: rgb(124, 190, 249);
 }
 
 body {
@@ -61,7 +63,7 @@ nav .right-submenu li:last-child {
   margin-right: 0.2em;
 }
 
-nav .left-submenu li:fst-child {
+nav .left-submenu li:fst-child {New anime RSS channel:
   margin-left: 0.2em;
 }
 
@@ -128,9 +130,15 @@ button {
   display: inline-block;
   cursor: pointer;
   background-color: var(--bg-color); 
+  outline: none;
 }
 
 button:hover:not([disabled]) {
+  border-color: var(--hover-text-color);
+  color: var(--hover-text-color);
+}
+
+button:focus:not([disabled]) {
   border-color: var(--hover-text-color);
   color: var(--hover-text-color);
 }
@@ -202,14 +210,150 @@ label.skewed-subscribe-checkbox div{
 }
 
 input.skewed-subscribe-checkbox+label  div{
-  background: #02C66F;
+  background: #FF3A19;
 }
 
 input.skewed-subscribe-checkbox:checked+label div{
-  background: #FF3A19;
+  background: #02C66F;
 }
 
 .anime-list-row .title {
   font-weight: bold;
   padding-bottom: var(--list-general-margine);
+}
+
+.fancy-input-wrapper {
+  font-size: 1.1rem;
+  margin: 0.2em 0.2em;
+  border: 0.15em;
+  border-style: solid;
+  border-radius: 1em;
+  padding-left: 0.8em;
+  padding-right: 1em;
+  border-color: var(--text-secondary-color);
+  color: var(--text-secondary-color);
+  text-decoration: none;
+  display: inline-block;
+  cursor: pointer;
+  background-color: var(--bg-color);
+  outline: none;
+  background-color: var(--text-input-bg-color);
+}
+
+.fancy-input-wrapper-error {
+  border-color: var(--error-color);
+}
+
+.fancy-button-input {
+  font-size: 1.1rem;
+  border-style: none;
+  padding-top: 0px;
+  padding-bottom: 0px;
+  border-color: var(--text-secondary-color);
+  color: var(--text-secondary-color);
+  text-decoration: none;
+  display: inline-block;
+  cursor: pointer;
+  background-color: var(--text-input-bg-color);
+  outline: none;
+}
+
+.content-wrapper {
+  color: var(--text-color);
+  position: absolute;
+  width: 100%;
+  left: 0px;
+  top: var(--navbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.content {
+  padding-top: 0.5rem;
+  width: 100%;
+  max-width: var(--page-max-width);
+}
+
+.login-form-flexbox {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.login-form-center {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.login-button-wrapper {
+  align-self: flex-end;
+}
+
+.error-box {
+  color: var(--error-color);
+  font-size: 0.8rem;
+}
+
+.loading {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+.loading > img {
+    height: auto;
+}
+
+.button-input {
+  font-size: 1.1rem;
+  border-style: none;
+  padding-top: 0px;
+  padding-bottom: 0px;
+  border-color: var(--text-secondary-color);
+  color: var(--text-secondary-color);
+  text-decoration: none;
+  display: inline-block;
+  cursor: pointer;
+  background-color: var(--text-input-bg-color);
+  outline: none;
+}
+
+.search {
+  font-size: 1.1rem;
+  margin: 0.2em 0.2em;
+  border: 0.15em;
+  border-style: solid;
+  border-radius: 1em;
+  padding-left: 0.8em;
+  padding-right: 1em;
+  border-color: var(--text-secondary-color);
+  color: var(--text-secondary-color);
+  text-decoration: none;
+  display: inline-block;
+  cursor: pointer;
+  background-color: var(--bg-color);
+  outline: none;
+  background-color: var(--text-input-bg-color);
+}
+
+.profile-data-row {
+  font-weight: bold;
+}
+
+.profile-data-row a {
+  color: var(--hyper-link-color)
+
+}
+.profile-data-row a::after {
+  color: var(--hyper-link-color)
+  text-decoration: none;
 }

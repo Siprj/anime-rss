@@ -18,13 +18,13 @@ module AnimeRss.Rest.Server
     )
   where
 
-import Relude (show, Foldable (foldr), mapM_)
+import Relude (show)
 import Control.Applicative (pure)
 import Data.Function (($), (.))
 import Data.Functor (fmap)
-import Data.Maybe (Maybe(Just, Nothing), maybe)
+import Data.Maybe (Maybe(Just, Nothing), maybe, fromMaybe)
 import Data.Monoid ((<>))
-import Data.Text (pack)
+import Data.Text (Text, pack)
 import Data.Time
     ( UTCTime
     , defaultTimeLocale
@@ -47,8 +47,7 @@ import Text.Feed.Constructor (feedFromAtom)
 import Text.Feed.Types (Feed)
 
 import qualified AnimeRss.DataModel.Types as Core
--- import AnimeRss.DataModel.Queries (listAnime, selectUserByEmail, listUserRelatedAnime, selectUser, modifyUsersAnime, listChannelEpisodes)
-import AnimeRss.Rest.Api (ChannelId, Api, Protected, Login (..), LoggedInUser (LoggedInUser, userId), User(..), PostAnimeFollow(..), Anime(..))
+import AnimeRss.Rest.Api (ChannelId, Api, Protected, Login (..), LoggedInUser (LoggedInUser, userId), User(..), PostAnimeFollow(..), Anime(..), SubParam(..))
 import AnimeRss.Rest.Authentication ()
 import Effectful ( Eff, (:>), IOE, MonadIO (..) )
 import Effectful.Error.Dynamic ( Error, throwError )
@@ -61,7 +60,6 @@ import Crypto.PasswordStore
 import Data.Text.Encoding
 import System.IO
 import AnimeRss.DataModel.Types (toPasswordHash, CreateUserFollows(..), DeleteUserFollows(..))
-import AnimeRss.Ids (UserId)
 
 
 data Context = Context
@@ -104,37 +102,34 @@ userGetHandler authUsr = do
         , episodeChannel = newsChannel
         }
 
-animeUpdateHandler :: (Handler' es, IOE :> es) => AuthResult LoggedInUser  -> [PostAnimeFollow] -> Eff es NoContent
-animeUpdateHandler authUsr follows = do
+animeUpdateHandler :: (Handler' es, IOE :> es) => AuthResult LoggedInUser  -> PostAnimeFollow -> Eff es NoContent
+animeUpdateHandler authUsr follow = do
     loggedInUser <- authHelper authUsr
-    let (inserts, deletes) = foldr (toInsertsDeletes loggedInUser.userId) ([], []) follows
-    mapM_ insertUserFollows inserts
-    mapM_ deleteUserFollows deletes
+    if follow.follow
+        then insertUserFollows $ CreateUserFollows loggedInUser.userId follow.animeId
+        else deleteUserFollows $ DeleteUserFollows loggedInUser.userId follow.animeId
     pure NoContent
-  where
-    toInsertsDeletes :: UserId -> PostAnimeFollow -> ([CreateUserFollows], [DeleteUserFollows]) -> ([CreateUserFollows], [DeleteUserFollows])
-    toInsertsDeletes userId e (xs, ys) = if e.follow
-      then (CreateUserFollows userId e.animeId : xs, ys)
-      else (xs, DeleteUserFollows userId e.animeId : ys)
 
-animeListHandler :: (Handler' es, IOE :> es) => AuthResult LoggedInUser  -> Eff es [Anime]
-animeListHandler authUrs = do
+animeListHandler :: (Handler' es, IOE :> es) => AuthResult LoggedInUser -> Maybe SubParam -> Maybe Text -> Eff es [Anime]
+animeListHandler authUrs mSubParam mSearch = do
     loggedInUser <- authHelper authUrs
-    animeList <- listUserRelatedAnime loggedInUser.userId
+    animeList <- listUserRelatedAnime loggedInUser.userId (fromMaybe All mSubParam) mSearch
     pure $ fmap toApiAnime animeList
   where
     toApiAnime Core.UserRelatedAnime{..} = Anime
         { animeId
         , title
-        , url = show url
-        , imageUrl = show imageUrl
+        , url = url
+        , imageUrl = imageUrl
         , date
         , following
         }
 
 loginHandler :: (Handler' es, IOE :> es) => Login -> Eff es (Headers '[Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
-loginHandler Login{..} = do
+loginHandler loginData@Login{..} = do
+    liftIO . putStrLn $ "login handler: " <> show loginData
     user <- selectUserByEmail email >>= maybe (throwError err401) pure
+    liftIO . putStrLn $ "selected user: " <> show user
     case verifyPassword (encodeUtf8 password) . toPasswordHash $ user.password of
         CryptoPassed v -> if v
             then pure ()

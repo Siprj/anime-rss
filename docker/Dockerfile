@@ -3,8 +3,9 @@ ARG UBUNTU_VERSION=22.04
 ARG GHC_VERSION=9.4.4
 ARG CABAL_VERSION=3.6.2.0
 ARG HLINT_VERSION=3.5
+ARG HLS_VERSION=1.10.0.0
 
-FROM ubuntu:$UBUNTU_VERSION as devel-base
+FROM ubuntu:$UBUNTU_VERSION as anime-rss-devel-base
 ARG CABAL_INDEX_STATE
 ARG CABAL_VERSION
 ARG GHC_VERSION
@@ -18,13 +19,16 @@ RUN apt-get update \
     && localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man
 ENV LANG=en_US.UTF-8
-ENV PATH="/opt/ghcup/bin:$PATH"
-RUN mkdir -p /opt/ghcup/bin/ \
-    && curl https://downloads.haskell.org/~ghcup/x86_64-linux-ghcup --output /opt/ghcup/bin/ghcup \
-    && chmod +x /opt/ghcup/bin/ghcup \
-    && ghcup install ghc $GHC_VERSION -i /opt/ghc/ \
-    && ghcup install cabal $CABAL_VERSION -i /opt/cabal/bin/
-ENV PATH="/opt/hlint/:/opt/ghc/bin:/opt/cabal/bin:$PATH"
+ENV GHCUP_INSTALL_BASE_PREFIX="/opt/"
+ENV PATH="/opt/.ghcup/bin:$PATH"
+RUN mkdir -p /opt/.ghcup/bin/ \
+    && curl https://downloads.haskell.org/~ghcup/x86_64-linux-ghcup --output /opt/.ghcup/bin/ghcup \
+    && chmod +x /opt/.ghcup/bin/ghcup \
+    && ghcup install ghc $GHC_VERSION \
+    && ghcup set ghc $GHC_VERSION \
+    && ghcup install cabal $CABAL_VERSION \
+    && ghcup set cabal $CABAL_VERSION
+ENV PATH="/opt/hlint/:$PATH"
 RUN HLIN_TMP=$(mktemp -d ".hlint-XXXXXX") \
     && curl -L --proto '=https' -o "${HLIN_TMP}/hlint.tar.gz" https://github.com/ndmitchell/hlint/releases/download/v${HLINT_VERSION}/hlint-${HLINT_VERSION}-x86_64-linux.tar.gz \
     && mkdir -p /opt/hlint/ \
@@ -33,14 +37,22 @@ RUN HLIN_TMP=$(mktemp -d ".hlint-XXXXXX") \
     && cabal update \
     && cabal install --install-method=copy --installdir=/usr/bin --install-method=copy cabal-fmt \
     && rm -r -f /root/.cabal \
+    && rm -r -f /opt/ghcup/cache \
+    && rm -r -f /opt/ghcup/tmp \
     && echo root:password | chpasswd
 
-FROM devel-base as devel
+FROM anime-rss-devel-base as anime-rss-devel
 ARG USER=devel
 ARG UID=1000
+ARG HLS_VERSION
 RUN useradd -r -u "$UID" -U -m -s /bin/bash "$USER" \
     && sed -e "s|PS1='|PS1='[D] |g" -i /home/$USER/.bashrc \
+    && ghcup install hls $HLS_VERSION \
+    && ghcup set hls $HLS_VERSION \
+    && rm -r -f /opt/.ghcup/cache \
+    && rm -r -f /opt/.ghcup/tmp \
     && echo $USER:password | chpasswd
+
 USER "$USER"
 RUN mkdir /home/$USER/.cabal
 WORKDIR "/home/$USER"
