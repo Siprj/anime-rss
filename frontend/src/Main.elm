@@ -1,10 +1,8 @@
 module Main exposing (main)
 
-import Debug
 import Browser
 import Browser.Dom exposing (focus)
-import Process exposing (sleep)
-import Task exposing (sequence, attempt)
+import Task exposing (attempt)
 import Html exposing (..)
 import Html
 import Html.Attributes exposing (..)
@@ -64,14 +62,14 @@ type alias LoginPageModel =
 
 updateAnimeListPage : String -> AnimeListMsg -> AnimeListPageModel -> (AnimeListPageModel, Cmd Msg)
 updateAnimeListPage xtoken animeListMsg animeListPageModel = case animeListMsg of
-    Search newSearch -> Debug.log "Search " ({ animeListPageModel | search = newSearch}, fetchAnimeListCmd (Just animeListPageModel.subscriptionSelector) (Just newSearch) xtoken)
-    SelectorChanged newSelector -> Debug.log "SelectorChanged " ({animeListPageModel | subscriptionSelector = newSelector }, fetchAnimeListCmd (Just newSelector) (Just animeListPageModel.search) xtoken)
+    Search newSearch -> ({ animeListPageModel | search = newSearch}, fetchAnimeListCmd (Just animeListPageModel.subscriptionSelector) (Just newSearch) xtoken)
+    SelectorChanged newSelector -> ({animeListPageModel | subscriptionSelector = newSelector }, fetchAnimeListCmd (Just newSelector) (Just animeListPageModel.search) xtoken)
     ChangeAnimeSubscription index animeId follow -> (updateAnimeFollowing index follow animeListPageModel, followAnimeCmd { animeId = animeId, follow = follow} xtoken)
 
 updateAnimeFollowing : Int -> Bool -> AnimeListPageModel -> AnimeListPageModel
 updateAnimeFollowing index follow animeListPageModel =
     let mElem = Array.get index animeListPageModel.animes
-        mNewElem = Debug.log "blabla" <| Maybe.map (\v -> { v |following = follow}) mElem
+        mNewElem = Maybe.map (\v -> { v |following = follow}) mElem
     in case mNewElem of
         Just newElem -> {animeListPageModel | animes = Array.set index newElem animeListPageModel.animes}
         Nothing -> animeListPageModel
@@ -92,12 +90,12 @@ update msg model = case (msg, model.page) of
     (GotProfileData res, _) -> resolveResponse model res resolveGotProfile
     (AnimeList animeListAction, AnimeListPage animeListPageModel) -> updatePage model AnimeListPage <| updateAnimeListPage model.xtoken animeListAction animeListPageModel
     (Login loginFormAction, LoginPage loginPageModel) -> updatePage model LoginPage <| updateLoginPage loginFormAction loginPageModel
-    (XTokenFetched xtoken, LoginPage loginPageModel) -> (Debug.log "XTokenFetched model: " { model | xtoken = xtoken }, Nav.pushUrl model.key <| routeToHref <| Debug.log "XTokenFetched next url: "  loginPageModel.nextUrl)
+    (XTokenFetched xtoken, LoginPage loginPageModel) -> ({ model | xtoken = xtoken }, Nav.pushUrl model.key <| routeToHref <| loginPageModel.nextUrl)
     (XTokenFetched xtoken, _) -> ({ model | xtoken = xtoken }, Cmd.none)
     (MovingToPage nextRoute, _) -> updateMovingToPage model nextRoute
     (AskForXtoken _, _) -> (model, Ports.fetchXToken ())
     (MovingToExternalPage externalUrl, _) -> (model, Nav.load externalUrl)
-    (_, _) -> Debug.log "unknown state and evet combination reached" (model, Cmd.none)
+    (_, _) -> (model, Cmd.none)
 
 updatePage : Model -> (subModel -> Page) -> (subModel, Cmd Msg) -> (Model, Cmd Msg)
 updatePage model toModel (subModel, cmd) = ({ model | page =  toModel subModel}, cmd)
@@ -194,7 +192,7 @@ pageToRoute page = case page of
     AnimeListPage _ -> AnimeListRoute
 
 updateMovingToPage : Model -> Route -> (Model, Cmd Msg)
-updateMovingToPage model route = case Debug.log "case in updateMovingToPage: " route of
+updateMovingToPage model route = case route of
     RootRoute -> (model, Nav.pushUrl model.key <| routeToHref AnimeListRoute)
     LoginRoute -> ({ model | page = emptyLoginPage AnimeListRoute}, Cmd.batch [Nav.pushUrl model.key <| routeToHref AnimeListRoute, focusLoginEmial])
     MyProfileRoute -> (model, Cmd.batch [fetchProfileCmd model.xtoken])
@@ -216,7 +214,7 @@ routeToHref route = case route of
     (AnimeSubscriptionRoute id sub) -> "/anime/" ++ id ++ subscriptionActionToString sub
 
 focusLoginEmial : Cmd Msg
-focusLoginEmial = attempt (\_ -> Debug.log " it is fucking wrong" NoOp) <| (focus "login-form-email-id")
+focusLoginEmial = attempt (\_ -> NoOp) <| (focus "login-form-email-id")
 
 onUrlRequest : Browser.UrlRequest -> Msg
 onUrlRequest urlRequest = case urlRequest of
@@ -459,7 +457,7 @@ profileDecode = D.map4 ProfileData
     (D.field "episodeChannel" D.string)
 
 fetchProfileCmd : String -> Cmd Msg
-fetchProfileCmd xtoken = Debug.log "fetching profile" <|
+fetchProfileCmd xtoken =
     getWithXtoken
     { url = "api/user"
     , expect = Http.expectJson GotProfileData profileDecode
