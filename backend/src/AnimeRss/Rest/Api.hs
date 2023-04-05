@@ -45,10 +45,11 @@ import GHC.Generics (Generic)
 import Optics (makeFieldLabelsWith, noPrefixFieldLabels)
 import Servant (NoContent, StdMethod (POST), Verb)
 import Servant.API (Capture, FromHttpApiData (..), Get, Header, Headers, JSON, Post, QueryParam, ReqBody, ToHttpApiData (..), (:<|>), (:>))
-import Servant.Auth.Server (Auth, Cookie, FromJWT, SetCookie, ToJWT)
+import AnimeRss.Rest.Auth
 import Text.Feed.Types (Feed)
 import Text.Read (Read, readMaybe)
 import Text.Show (Show, show)
+import Web.Cookie
 
 type Email = Text
 
@@ -56,14 +57,6 @@ newtype LoggedInUser = LoggedInUser
   { userId :: UserId
   }
   deriving stock (Show, Eq, Generic)
-
-instance ToJSON LoggedInUser
-
-instance ToJWT LoggedInUser
-
-instance FromJSON LoggedInUser
-
-instance FromJWT LoggedInUser
 
 type ChannelId = UUID
 
@@ -151,4 +144,4 @@ type Api =
   "atom" :> "episodes" :> Capture "channel-id" ChannelId :> Get '[AtomFeed] Feed
     :<|> "atom" :> "animes" :> Get '[AtomFeed] Feed
     :<|> "api" :> "login" :> ReqBody '[JSON] Login :> Post '[JSON] (Headers '[Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
-    :<|> "api" :> Servant.Auth.Server.Auth '[Cookie] LoggedInUser :> Protected
+    :<|> "api" :> APIAuthProtect "session" :> Protected

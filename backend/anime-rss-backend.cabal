@@ -52,6 +52,9 @@ library
       AnimeRss.Rest.AtomMime
       AnimeRss.Rest.Authentication
       AnimeRss.Rest.Server
+      AnimeRss.Rest.Auth
+      AnimeRss.Rest.Cookies
+      AnimeRss.Rest.SetCookies
   hs-source-dirs:
       src
   if flag(pedantic)
@@ -89,8 +92,11 @@ library
     , either
     , servant
     , servant-server
-    , servant-auth-server
     , feed
     , data-default
     , http-media
     , xml-conduit
+    , wai
+    , http-types
+    , cookie
+    , case-insensitive

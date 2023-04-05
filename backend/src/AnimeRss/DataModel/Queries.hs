@@ -12,6 +12,8 @@ module AnimeRss.DataModel.Queries (
   insertUserFollows,
   deleteUserFollows,
   listUserRelatedAnime,
+  selectUserBySession,
+  insertUserSession,
 ) where
 
 import AnimeRss.DataModel.Types
@@ -227,7 +229,7 @@ listUserRelatedAnime :: (PostgreSql :> es, IOE :> es) => UserId -> SubParam -> M
 listUserRelatedAnime userId subParam mSearch = do
   liftIO $ putStrLn "listUserRelatedAnime"
   liftIO $ print select
-  case mSearch of
+  case mNormalizedSearch of
     Just search -> query select (userId, search)
     Nothing -> query select (SQL.Only userId)
   where
@@ -281,3 +283,34 @@ listUserRelatedAnime userId subParam mSearch = do
     mNormalizedSearch = case mSearch of
       Just v -> if null v then Nothing else Just v
       Nothing -> Nothing
+
+-- TODO: Session should have some timeout...
+selectUserBySession :: (IOE :> es, PostgreSql :> es) => UUID -> Eff es (Maybe UserId)
+selectUserBySession session = do
+  liftIO $ putStrLn "selectUserBySession"
+  ret <-
+    query
+      [sql| SELECT
+        user_id
+    FROM sessions
+    WHERE id = ?
+    |]
+      (SQL.Only session)
+  liftIO $ print ret
+  expecOneOrZeroResults "getDbUser" $ fmap SQL.fromOnly ret
+
+insertUserSession :: (IOE :> es, PostgreSql :> es) => UserId -> Eff es (Maybe SessionId)
+insertUserSession userId = do
+  liftIO $ putStrLn "insertUserSession"
+  ret <-
+    returning
+      [sql| INSERT INTO sessions (
+        user_id
+    )
+    VALUES (?)
+    RETURNING
+        id
+    |]
+      [SQL.Only userId]
+  liftIO $ print ret
+  expecOneOrZeroResults "createDbUser" $ fmap SQL.fromOnly ret

@@ -17,7 +17,6 @@ module Main (main) where
 
 import AnimeRss.DataModel.Migrations (migrateAll)
 import AnimeRss.Rest.Api (Api)
-import AnimeRss.Rest.Server (Context (Context), apiHander)
 import AnimeRss.Scraper.Service (runScraper)
 import Control.Applicative (pure)
 import Control.Concurrent (forkIO, threadDelay)
@@ -34,8 +33,12 @@ import Network.URI (URI)
 import Network.URI.Static (staticURI)
 import Network.Wai.Handler.Warp (run)
 import Servant (Context (EmptyContext, (:.)), HasServer (hoistServerWithContext), serveWithContext, throwError)
-import Servant.Auth.Server (CookieSettings (cookieIsSecure), IsSecure (NotSecure), JWTSettings, defaultCookieSettings, defaultJWTSettings, generateKey)
 import System.IO (IO)
+import AnimeRss.Rest.Server
+    ( Context(Context),
+      AuthSessionHandler,
+      authHandlerSession,
+      apiHander )
 
 baseUrl :: URI
 baseUrl = $$(staticURI "https://gogoanime.sk/")
@@ -49,18 +52,20 @@ main = do
   forever $ threadDelay 1000000000
   where
     restApp dbPool = do
-      myKey <- generateKey
-      let cookiesSettings = defaultCookieSettings {cookieIsSecure = NotSecure}
-          jwtCfg = defaultJWTSettings myKey
-          cfg = cookiesSettings :. jwtCfg :. EmptyContext
+      let natForAuth eff = do
+            res <-
+              liftIO . runEff . runErrorNoCallStack . runDBE dbPool $
+                runReader (Context baseUrl) eff
+            either throwError pure res
+          cfg = authHandlerSession natForAuth :. EmptyContext
           nat eff = do
             res <-
               liftIO . runEff . runErrorNoCallStack . runDBE dbPool $
-                runReader (Context baseUrl cookiesSettings jwtCfg) eff
+                runReader (Context baseUrl) eff
             either throwError pure res
 
       run 8080 . serveWithContext restAPI cfg $
-        hoistServerWithContext restAPI (Proxy :: Proxy '[CookieSettings, JWTSettings]) nat apiHander
+        hoistServerWithContext restAPI (Proxy :: Proxy '[AuthSessionHandler]) nat apiHander
 
     restAPI :: Proxy Api
     restAPI = Proxy

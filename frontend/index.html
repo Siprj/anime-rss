@@ -17,7 +17,7 @@
 <script type="text/javascript">
 
   try {
-    xtoken = document.cookie.match("XSRF-TOKEN=([^;]*)")[1]
+    xtoken = document.cookie.match("x-token=([^;]*)")[1]
   } catch (error) { 
       xtoken = ""
   }
@@ -31,7 +31,8 @@
   var app = Elm.Main.init({flags: { xtoken: xtoken, origin: origin}});
 
   app.ports.fetchXToken.subscribe(function(msg) {
-      app.ports.xTokenReceiver.send(document.cookie.match("XSRF-TOKEN=([^;]*)")[1]);
+      console.log(document.cookie);
+      app.ports.xTokenReceiver.send(document.cookie.match("x-token=([^;]*)")[1]);
   })
 </script>
 

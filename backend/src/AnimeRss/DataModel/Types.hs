@@ -5,7 +5,6 @@ module AnimeRss.DataModel.Types (
   CreateEpisode (..),
   CreateUser (..),
   User (..),
-  TemporaryKey (..),
   Anime (..),
   CreateUserFollows (..),
   DeleteUserFollows (..),
@@ -93,14 +92,6 @@ data User = User
   }
   deriving stock (Show, Generic)
   deriving anyclass (SQL.FromRow)
-
-data TemporaryKey = TemporaryKey
-  { key :: TemporaryKeyId
-  , until :: UTCTime
-  , userId :: UserId
-  , userEmail :: Text
-  }
-  deriving stock (Show, Generic)
 
 data Anime = Anime
   { id :: AnimeId

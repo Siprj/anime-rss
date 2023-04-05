@@ -227,7 +227,7 @@ onUrlChange url = MovingToPage <| parseLocation url
 getWithXtoken : { url : String, expect : Http.Expect msg, xtoken : String } -> Cmd msg
 getWithXtoken r = Http.request
     { method = "GET"
-    , headers = [Http.header "X-XSRF-TOKEN" r.xtoken, Http.header "Accept" "application/json"]
+    , headers = [Http.header "x-token" r.xtoken, Http.header "Accept" "application/json"]
     , url = r.url
     , body = Http.emptyBody
     , expect = r.expect
@@ -238,7 +238,7 @@ getWithXtoken r = Http.request
 postWithXtoken : { url : String, expect : Http.Expect msg, xtoken : String, body : E.Value} -> Cmd msg
 postWithXtoken r = Http.request
     { method = "POST"
-    , headers = [Http.header "X-XSRF-TOKEN" r.xtoken, Http.header "Accept" "application/json"]
+    , headers = [Http.header "x-token" r.xtoken, Http.header "Accept" "application/json"]
     , url = r.url
     , body = Http.jsonBody r.body
     , expect = r.expect

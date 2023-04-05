@@ -14,16 +14,17 @@
 module AnimeRss.Rest.Server (
   Context (..),
   apiHander,
-  -- , protectedHandlers
+  authHandlerSession,
+  AuthSessionHandler,
 ) where
 
-import AnimeRss.DataModel.Queries (deleteUserFollows, getDbUserById, insertUserFollows, listAnimes, listEpisodesByChannelId, listUserRelatedAnime, selectUserByEmail)
+import AnimeRss.DataModel.Queries (deleteUserFollows, getDbUserById, insertUserFollows, listAnimes, listEpisodesByChannelId, listUserRelatedAnime, selectUserByEmail, selectUserBySession, insertUserSession)
 import AnimeRss.DataModel.Types (CreateUserFollows (..), DeleteUserFollows (..), toPasswordHash)
 import AnimeRss.DataModel.Types qualified as Core
 import AnimeRss.Rest.Api (Anime (..), Api, ChannelId, LoggedInUser (LoggedInUser, userId), Login (..), PostAnimeFollow (..), Protected, SubParam (..), User (..))
 import AnimeRss.Rest.Authentication ()
 import Control.Applicative (pure)
-import Control.Monad ((>>=))
+import Control.Monad ((>>=), Monad ((>>)))
 import Crypto.Error (CryptoFailable (..))
 import Crypto.PasswordStore
 import DBE (PostgreSql)
@@ -42,9 +43,8 @@ import Data.Time (
 import Effectful (Eff, IOE, MonadIO (..), (:>))
 import Effectful.Error.Dynamic (Error, throwError)
 import Effectful.Reader.Dynamic (Reader, ask)
-import Relude (show)
-import Servant (Header, Headers, NoContent (NoContent), ServerError, ServerT, URI, err401, err409, (:<|>) ((:<|>)))
-import Servant.Auth.Server (AuthResult (..), CookieSettings, JWTSettings, SetCookie, acceptLogin)
+import Relude (show, unless, (==))
+import Servant (Header, Headers, NoContent (NoContent), ServerError, ServerT, URI, err401, err409, (:<|>) ((:<|>)), addHeader, err500)
 import System.IO
 import Text.Atom.Feed (
   Entry (entryLinks, entrySummary),
@@ -58,11 +58,58 @@ import Text.Atom.Feed (
 import Text.Atom.Feed qualified as Atom (Feed)
 import Text.Feed.Constructor (feedFromAtom)
 import Text.Feed.Types (Feed)
+import AnimeRss.Rest.Auth
+import Network.Wai
+import Servant.Server (Handler)
+import Data.ByteString hiding (pack, unpack)
+import Web.Cookie
+import Data.List
+import Network.HTTP.Types (hCookie)
+import Data.CaseInsensitive qualified as CI
+import Data.UUID (fromASCIIBytes, toASCIIBytes)
+import AnimeRss.Ids (fromId)
+import Data.UUID.V4 (nextRandom)
+import Data.Bool (Bool(True))
 
-data Context = Context
+type instance APIAuthServerData (APIAuthProtect "session") = LoggedInUser
+type instance APIAuthServerDataCookies (APIAuthProtect "session") = ZeroCookies
+
+type AuthSessionHandler = APIAuthHandler Request LoggedInUser ZeroCookies
+
+xTokenName :: ByteString
+xTokenName = "x-token"
+
+sessionName :: ByteString
+sessionName = "session"
+
+authHandlerSession :: (IOE :> es, Error ServerError :> es, PostgreSql :> es) => (Eff es (LoggedInUser, SetCookieList ZeroCookies) -> Handler (LoggedInUser, SetCookieList ZeroCookies)) -> AuthSessionHandler
+authHandlerSession runEffectStack  = mkAPIAuthHandler handler
+  where
+    handler :: Request -> Handler (LoggedInUser, SetCookieList ZeroCookies)
+    handler req = runEffectStack $ do
+      liftIO $ putStrLn "authHandlerSession"
+      cookies' <- justOrErr401 "Cookie header is missing." . lookup hCookie $ requestHeaders req
+      let cookies = parseCookies cookies'
+      sessionIdBs <- justOrErr401 "Session cookie is missing." $ lookup sessionName cookies
+      xToken <- justOrErr401 "x-token cookie is missing." $ lookup xTokenName cookies
+      xTokenHeader <- justOrErr401 "x-token header is missing." . lookup (CI.mk xTokenName) $ requestHeaders req
+      unless (xToken == xTokenHeader) $ do
+        -- TODO: Add error log
+        liftIO $ putStrLn "it all sucks..."
+        liftIO $ print xToken
+        liftIO $ print xTokenHeader
+        throwError err401
+      sessionId <- justOrErr401 "Session ID is not valid UUID" $ fromASCIIBytes sessionIdBs
+      userId <- selectUserBySession sessionId >>= justOrErr401 "Session ID not found"
+      pure (LoggedInUser {..}, SetCookieNil)
+
+    justOrErr401 :: (IOE :> es, Error ServerError :> es) => Text -> Maybe a -> Eff es a
+    justOrErr401 _ (Just v) = pure v
+    -- TODO: Add logging for errors...
+    justOrErr401 logMessage Nothing = liftIO (print logMessage) >> throwError err401
+
+newtype Context = Context
   { baseUri :: URI
-  , cookiesSettings :: CookieSettings
-  , jwtSettings :: JWTSettings
   }
 
 type Handler' es = (Error ServerError :> es, Reader Context :> es, PostgreSql :> es)
@@ -74,14 +121,7 @@ maybeThrow e = \case
   Nothing -> throwError e
   Just v -> pure v
 
-authHelper :: (Handler' es) => AuthResult LoggedInUser -> Eff es LoggedInUser
-authHelper = \case
-  BadPassword -> throwError err401
-  NoSuchUser -> throwError err401
-  Indefinite -> throwError err401
-  Authenticated user -> pure user
-
-protectedHandlers :: (Handler' es, IOE :> es) => AuthResult LoggedInUser -> RestServer Protected es
+protectedHandlers :: (Handler' es, IOE :> es) => LoggedInUser -> RestServer Protected es
 protectedHandlers user = go
   where
     go =
@@ -89,9 +129,8 @@ protectedHandlers user = go
         :<|> animeUpdateHandler user
         :<|> animeListHandler user
 
-userGetHandler :: (Handler' es) => AuthResult LoggedInUser -> Eff es User
-userGetHandler authUsr = do
-  loggedInUser <- authHelper authUsr
+userGetHandler :: (Handler' es) => LoggedInUser -> Eff es User
+userGetHandler loggedInUser = do
   getDbUserById loggedInUser.userId >>= maybeThrow err409 . fmap toUser
   where
     toUser Core.User {..} =
@@ -102,17 +141,15 @@ userGetHandler authUsr = do
         , episodeChannel = newsChannel
         }
 
-animeUpdateHandler :: (Handler' es, IOE :> es) => AuthResult LoggedInUser -> PostAnimeFollow -> Eff es NoContent
-animeUpdateHandler authUsr follow = do
-  loggedInUser <- authHelper authUsr
+animeUpdateHandler :: (Handler' es, IOE :> es) => LoggedInUser -> PostAnimeFollow -> Eff es NoContent
+animeUpdateHandler loggedInUser follow = do
   if follow.follow
     then insertUserFollows $ CreateUserFollows loggedInUser.userId follow.animeId
     else deleteUserFollows $ DeleteUserFollows loggedInUser.userId follow.animeId
   pure NoContent
 
-animeListHandler :: (Handler' es, IOE :> es) => AuthResult LoggedInUser -> Maybe SubParam -> Maybe Text -> Eff es [Anime]
-animeListHandler authUrs mSubParam mSearch = do
-  loggedInUser <- authHelper authUrs
+animeListHandler :: (Handler' es, IOE :> es) => LoggedInUser -> Maybe SubParam -> Maybe Text -> Eff es [Anime]
+animeListHandler loggedInUser mSubParam mSearch = do
   animeList <- listUserRelatedAnime loggedInUser.userId (fromMaybe All mSubParam) mSearch
   pure $ fmap toApiAnime animeList
   where
@@ -126,7 +163,7 @@ animeListHandler authUrs mSubParam mSearch = do
         , following
         }
 
-loginHandler :: (Handler' es, IOE :> es) => Login -> Eff es (Headers '[Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
+loginHandler :: (PostgreSql :> es, Error ServerError :> es, IOE :> es) => Login -> Eff es (Headers '[Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
 loginHandler loginData@Login {..} = do
   liftIO . putStrLn $ "login handler: " <> show loginData
   user <- selectUserByEmail email >>= maybe (throwError err401) pure
@@ -140,15 +177,11 @@ loginHandler loginData@Login {..} = do
     CryptoFailed e -> do
       liftIO $ print e
       throwError err401
-  Context {..} <- ask
-
-  mApplyCookies <- liftIO . acceptLogin cookiesSettings jwtSettings $ toLoggedInUser user
-  case mApplyCookies of
-    Nothing -> throwError err401
-    Just applyCookies -> pure $ applyCookies NoContent
-  where
-    toLoggedInUser :: Core.User -> LoggedInUser
-    toLoggedInUser Core.User {id} = LoggedInUser id
+  sessionId <- insertUserSession user.id >>= maybe (throwError err500) pure
+  let sessionCookie = defaultSetCookie { setCookieName = sessionName, setCookieValue = encodeUtf8 . fromId $ sessionId, setCookieHttpOnly = True, setCookiePath = Just "/" }
+  xtokenUUID <- liftIO nextRandom
+  let xtokenCookie = defaultSetCookie { setCookieName = xTokenName, setCookieValue = toASCIIBytes xtokenUUID, setCookiePath = Just "/" }
+  pure . addHeader sessionCookie . addHeader xtokenCookie $ NoContent
 
 atomEpisodesGetHandler :: (Handler' es, IOE :> es) => ChannelId -> Eff es Feed
 atomEpisodesGetHandler channelId = do

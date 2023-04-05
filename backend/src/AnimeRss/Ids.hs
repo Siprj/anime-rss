@@ -6,7 +6,7 @@ module AnimeRss.Ids (
   AnimeId,
   EpisodeId,
   UserId,
-  TemporaryKeyId,
+  SessionId
 ) where
 
 import Data.Aeson (FromJSON, ToJSON)
@@ -19,7 +19,7 @@ data IdKind
   = Anime
   | Episode
   | User
-  | TemporaryKey
+  | Session
 
 newtype Id (a :: IdKind) = Id UUID
   deriving stock (Show, Eq, Generic)
@@ -31,7 +31,8 @@ type EpisodeId = Id 'Episode
 
 type UserId = Id 'User
 
-type TemporaryKeyId = Id 'TemporaryKey
+
+type SessionId = Id 'Session
 
 unsafeId :: Text -> Maybe (Id (a :: IdKind))
 unsafeId v = Id <$> fromText v

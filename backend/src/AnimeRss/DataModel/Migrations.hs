@@ -27,9 +27,9 @@ migrateAll connection = runMigrations connection migrationList >>= either (throw
       [ enableUUIDChange
       , initEpisodesTableChange
       , initUsersTableChange
-      , --      , initTemporaryKeysTableChange
-        initAnimesTableChange
+      , initAnimesTableChange
       , initUserFollowsTableChange
+      , initSessionsTableChange
       ]
 
 enableUUIDMigrationName :: ChangeName
@@ -135,7 +135,7 @@ initUserFollowsTableChange :: Change PGMigration
 initUserFollowsTableChange =
   Change
     { changeName = initUserFollowsMigrationName
-    , changeDescription = Just "Create user_follows stable."
+    , changeDescription = Just "Create user_follows table."
     , changeDependencies = [enableUUIDMigrationName, initUsersMigrationName]
     , changeMethod =
         MigrationQuery
@@ -147,5 +147,23 @@ initUserFollowsTableChange =
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (anime_id) REFERENCES animes(id) ON DELETE CASCADE,
         UNIQUE (user_id, anime_id)
+        )|]
+    }
+
+initSessionsMigrationName :: ChangeName
+initSessionsMigrationName = ChangeName {changeNameText = "init_sessions"}
+
+initSessionsTableChange :: Change PGMigration
+initSessionsTableChange =
+  Change
+    { changeName = initSessionsMigrationName
+    , changeDescription = Just "Create sessions table."
+    , changeDependencies = [enableUUIDMigrationName, initUsersMigrationName]
+    , changeMethod =
+        MigrationQuery
+          [sql| CREATE TABLE sessions (
+        id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+        user_id UUID NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )|]
     }
