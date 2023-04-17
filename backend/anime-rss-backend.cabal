@@ -100,3 +100,5 @@ library
     , http-types
     , cookie
     , case-insensitive
+    , otel-haskell-sdk
+    , http-client

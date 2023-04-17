@@ -45,7 +45,6 @@ import Effectful.Error.Dynamic (Error, throwError)
 import Effectful.Reader.Dynamic (Reader, ask)
 import Relude (show, unless, (==))
 import Servant (Header, Headers, NoContent (NoContent), ServerError, ServerT, URI, err401, err409, (:<|>) ((:<|>)), addHeader, err500)
-import System.IO
 import Text.Atom.Feed (
   Entry (entryLinks, entrySummary),
   TextContent (HTMLString, TextString),
@@ -70,6 +69,8 @@ import Data.UUID (fromASCIIBytes, toASCIIBytes)
 import AnimeRss.Ids (fromId)
 import Data.UUID.V4 (nextRandom)
 import Data.Bool (Bool(True))
+import Otel.Effect
+import Otel.Type
 
 type instance APIAuthServerData (APIAuthProtect "session") = LoggedInUser
 type instance APIAuthServerDataCookies (APIAuthProtect "session") = ZeroCookies
@@ -82,31 +83,31 @@ xTokenName = "x-token"
 sessionName :: ByteString
 sessionName = "session"
 
-authHandlerSession :: (IOE :> es, Error ServerError :> es, PostgreSql :> es) => (Eff es (LoggedInUser, SetCookieList ZeroCookies) -> Handler (LoggedInUser, SetCookieList ZeroCookies)) -> AuthSessionHandler
+authHandlerSession :: (Error ServerError :> es, PostgreSql :> es, Otel :> es) => (Eff es (LoggedInUser, SetCookieList ZeroCookies) -> Handler (LoggedInUser, SetCookieList ZeroCookies)) -> AuthSessionHandler
 authHandlerSession runEffectStack  = mkAPIAuthHandler handler
   where
     handler :: Request -> Handler (LoggedInUser, SetCookieList ZeroCookies)
-    handler req = runEffectStack $ do
-      liftIO $ putStrLn "authHandlerSession"
+    handler req = runEffectStack . traceInternal_ "authHandlerSession" $ do
       cookies' <- justOrErr401 "Cookie header is missing." . lookup hCookie $ requestHeaders req
       let cookies = parseCookies cookies'
       sessionIdBs <- justOrErr401 "Session cookie is missing." $ lookup sessionName cookies
       xToken <- justOrErr401 "x-token cookie is missing." $ lookup xTokenName cookies
       xTokenHeader <- justOrErr401 "x-token header is missing." . lookup (CI.mk xTokenName) $ requestHeaders req
       unless (xToken == xTokenHeader) $ do
-        -- TODO: Add error log
-        liftIO $ putStrLn "it all sucks..."
-        liftIO $ print xToken
-        liftIO $ print xTokenHeader
+        let attributes =
+              [ KeyValue "xtoken-cookie" . StringV $ show xToken
+              , KeyValue "xtoken-cookie" . StringV $ show xTokenHeader
+              ]
+        logInfo attributes "xtokens are not the same"
         throwError err401
       sessionId <- justOrErr401 "Session ID is not valid UUID" $ fromASCIIBytes sessionIdBs
       userId <- selectUserBySession sessionId >>= justOrErr401 "Session ID not found"
       pure (LoggedInUser {..}, SetCookieNil)
 
-    justOrErr401 :: (IOE :> es, Error ServerError :> es) => Text -> Maybe a -> Eff es a
+    justOrErr401 :: (Otel :> es, Error ServerError :> es) => Text -> Maybe a -> Eff es a
     justOrErr401 _ (Just v) = pure v
     -- TODO: Add logging for errors...
-    justOrErr401 logMessage Nothing = liftIO (print logMessage) >> throwError err401
+    justOrErr401 logMessage Nothing = logInfo_ logMessage >> throwError err401
 
 newtype Context = Context
   { baseUri :: URI
@@ -121,7 +122,7 @@ maybeThrow e = \case
   Nothing -> throwError e
   Just v -> pure v
 
-protectedHandlers :: (Handler' es, IOE :> es) => LoggedInUser -> RestServer Protected es
+protectedHandlers :: (Handler' es, Otel :> es) => LoggedInUser -> RestServer Protected es
 protectedHandlers user = go
   where
     go =
@@ -129,8 +130,8 @@ protectedHandlers user = go
         :<|> animeUpdateHandler user
         :<|> animeListHandler user
 
-userGetHandler :: (Handler' es) => LoggedInUser -> Eff es User
-userGetHandler loggedInUser = do
+userGetHandler :: (Handler' es, Otel :> es) => LoggedInUser -> Eff es User
+userGetHandler loggedInUser = traceInternal_ "userGetHandler" $ do
   getDbUserById loggedInUser.userId >>= maybeThrow err409 . fmap toUser
   where
     toUser Core.User {..} =
@@ -141,15 +142,15 @@ userGetHandler loggedInUser = do
         , episodeChannel = newsChannel
         }
 
-animeUpdateHandler :: (Handler' es, IOE :> es) => LoggedInUser -> PostAnimeFollow -> Eff es NoContent
-animeUpdateHandler loggedInUser follow = do
+animeUpdateHandler :: (Handler' es, Otel :> es) => LoggedInUser -> PostAnimeFollow -> Eff es NoContent
+animeUpdateHandler loggedInUser follow = traceInternal_ "animeUpdateHandler" $ do
   if follow.follow
     then insertUserFollows $ CreateUserFollows loggedInUser.userId follow.animeId
     else deleteUserFollows $ DeleteUserFollows loggedInUser.userId follow.animeId
   pure NoContent
 
-animeListHandler :: (Handler' es, IOE :> es) => LoggedInUser -> Maybe SubParam -> Maybe Text -> Eff es [Anime]
-animeListHandler loggedInUser mSubParam mSearch = do
+animeListHandler :: (Handler' es, Otel :> es) => LoggedInUser -> Maybe SubParam -> Maybe Text -> Eff es [Anime]
+animeListHandler loggedInUser mSubParam mSearch = traceInternal_ "animeListHandler" $ do
   animeList <- listUserRelatedAnime loggedInUser.userId (fromMaybe All mSubParam) mSearch
   pure $ fmap toApiAnime animeList
   where
@@ -163,19 +164,20 @@ animeListHandler loggedInUser mSubParam mSearch = do
         , following
         }
 
-loginHandler :: (PostgreSql :> es, Error ServerError :> es, IOE :> es) => Login -> Eff es (Headers '[Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
-loginHandler loginData@Login {..} = do
-  liftIO . putStrLn $ "login handler: " <> show loginData
+loginHandler :: (PostgreSql :> es, Error ServerError :> es, Otel :> es, IOE :> es) => Login -> Eff es (Headers '[Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
+loginHandler Login {..} = traceInternal_ "loginHandler" $ do
   user <- selectUserByEmail email >>= maybe (throwError err401) pure
-  liftIO . putStrLn $ "selected user: " <> show user
+  logInfo_ $ "selected user: " <> show user
   case verifyPassword (encodeUtf8 password) . toPasswordHash $ user.password of
     CryptoPassed v ->
       if v
-        then pure ()
-        else throwError err401
-    -- TODO: Better logging???
+        then do
+          logInfo_ $ "User authenticated: " <> show user
+        else do
+          logInfo_ $ "User authentication failed: " <> show user
+          throwError err401
     CryptoFailed e -> do
-      liftIO $ print e
+      logError_ $ show e
       throwError err401
   sessionId <- insertUserSession user.id >>= maybe (throwError err500) pure
   let sessionCookie = defaultSetCookie { setCookieName = sessionName, setCookieValue = encodeUtf8 . fromId $ sessionId, setCookieHttpOnly = True, setCookiePath = Just "/" }
@@ -183,8 +185,8 @@ loginHandler loginData@Login {..} = do
   let xtokenCookie = defaultSetCookie { setCookieName = xTokenName, setCookieValue = toASCIIBytes xtokenUUID, setCookiePath = Just "/" }
   pure . addHeader sessionCookie . addHeader xtokenCookie $ NoContent
 
-atomEpisodesGetHandler :: (Handler' es, IOE :> es) => ChannelId -> Eff es Feed
-atomEpisodesGetHandler channelId = do
+atomEpisodesGetHandler :: (Handler' es, Otel :> es) => ChannelId -> Eff es Feed
+atomEpisodesGetHandler channelId = traceInternal_ "atomEpisodesGetHandler" $ do
   context <- ask
   episodes <- listEpisodesByChannelId channelId
 
@@ -225,8 +227,8 @@ atomEpisodesGetHandler channelId = do
             . pack
             $ formatTime defaultTimeLocale rfc822DateFormat date
 
-atomAnimeGetHandler :: (Handler' es, IOE :> es) => Eff es Feed
-atomAnimeGetHandler = do
+atomAnimeGetHandler :: (Otel :> es, Handler' es) => Eff es Feed
+atomAnimeGetHandler = traceInternal_ "atomAnimeGetHandler" $ do
   animes <- listAnimes
   context <- ask
 
@@ -252,7 +254,6 @@ atomAnimeGetHandler = do
         { entryLinks = [nullLink $ show url]
         , entrySummary =
             Just . HTMLString
-            -- TODO: Use some HTML template language
             -- TODO: Add link to the server with possibility to follow the anime
             $
               "<div><a href=\""
@@ -270,7 +271,7 @@ atomAnimeGetHandler = do
             . pack
             $ formatTime defaultTimeLocale rfc822DateFormat date
 
-apiHander :: (Handler' es, IOE :> es) => RestServer Api es
+apiHander :: (Handler' es, Otel :> es, IOE :> es) => RestServer Api es
 apiHander =
   atomEpisodesGetHandler
     :<|> atomAnimeGetHandler

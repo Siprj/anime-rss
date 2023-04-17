@@ -101,5 +101,6 @@ executable admin-tui
     , xml
     , xml-conduit
     , effectful-core
+    , otel-haskell-sdk
   if flag(pedantic)
     ghc-options: -Werror

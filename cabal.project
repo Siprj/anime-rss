@@ -2,3 +2,8 @@ packages: admin-tui server backend
 
 allow-newer:
   , servant-auth:lens
+
+source-repository-package
+    type: git
+    location: https://github.com/Siprj/otel-haskell-sdk/
+    tag: bd0d988accf632ed5a37e84a8ee39a00aa365d8e

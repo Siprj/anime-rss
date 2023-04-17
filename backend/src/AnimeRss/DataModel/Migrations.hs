@@ -30,6 +30,8 @@ migrateAll connection = runMigrations connection migrationList >>= either (throw
       , initAnimesTableChange
       , initUserFollowsTableChange
       , initSessionsTableChange
+      , initStateTableChange
+      , initGogoanimeURLTableChange
       ]
 
 enableUUIDMigrationName :: ChangeName
@@ -166,4 +168,39 @@ initSessionsTableChange =
         user_id UUID NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )|]
+    }
+
+initStateMigrationName :: ChangeName
+initStateMigrationName = ChangeName {changeNameText = "init_sessions"}
+
+initStateTableChange :: Change PGMigration
+initStateTableChange =
+  Change
+    { changeName = initStateMigrationName
+    , changeDescription = Just "Create url table."
+    , changeDependencies = [enableUUIDMigrationName]
+    , changeMethod =
+        MigrationQuery
+          [sql| CREATE TABLE state (
+        key TEXT NOT NULL,
+        valueTEXT NOT NULL
+        )|]
+    }
+
+initGogoanimeURLMigrationName :: ChangeName
+initGogoanimeURLMigrationName = ChangeName {changeNameText = "init_sessions"}
+
+initGogoanimeURLTableChange :: Change PGMigration
+initGogoanimeURLTableChange =
+  Change
+    { changeName = initGogoanimeURLMigrationName
+    , changeDescription = Just "Create url table."
+    , changeDependencies = [initStateMigrationName]
+    , changeMethod =
+        MigrationQuery
+          [sql| INSERT INTO state (
+        key,
+        value
+        ) VALUES ('gogoanime_url', 'https://gogoanime.gr')
+        |]
     }

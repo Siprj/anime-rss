@@ -14,6 +14,8 @@ module AnimeRss.DataModel.Queries (
   listUserRelatedAnime,
   selectUserBySession,
   insertUserSession,
+  upsertGogoAnimeUrl,
+  selectGogoAnimeUrl
 ) where
 
 import AnimeRss.DataModel.Types
@@ -28,6 +30,9 @@ import Database.PostgreSQL.Simple qualified as SQL
 import Database.PostgreSQL.Simple.SqlQQ (sql)
 import Effectful
 import Relude hiding (All, head, id, null)
+import Otel.Effect
+import Network.URI (URI, parseURI)
+import Data.Text qualified as T
 
 expecOneOrZeroResults :: Text -> [a] -> Eff es (Maybe a)
 expecOneOrZeroResults origin values = do
@@ -52,8 +57,8 @@ expectOneResult origin values = do
     then pure $ head values
     else throwM err
 
-insertDbUser :: (PostgreSql :> es) => CreateUser -> Eff es (Maybe User)
-insertDbUser CreateUser {..} = do
+insertDbUser :: (Otel :> es, PostgreSql :> es) => CreateUser -> Eff es (Maybe User)
+insertDbUser CreateUser {..} = traceInternal_ "insertDbUser" $ do
   ret <-
     returning
       [sql| INSERT INTO users (
@@ -70,10 +75,10 @@ insertDbUser CreateUser {..} = do
         news_channel
     |]
       [(name, email, password)]
-  expecOneOrZeroResults "createDbUser" ret
+  expecOneOrZeroResults "insertDbUser" ret
 
-getDbUserById :: (PostgreSql :> es) => UserId -> Eff es (Maybe User)
-getDbUserById userId = do
+getDbUserById :: (Otel :> es, PostgreSql :> es) => UserId -> Eff es (Maybe User)
+getDbUserById userId = traceInternal_ "getDbUserById" $ do
   ret <-
     query
       [sql| SELECT
@@ -86,10 +91,10 @@ getDbUserById userId = do
     WHERE id = ?
     |]
       (SQL.Only userId)
-  expecOneOrZeroResults "getDbUser" ret
+  expecOneOrZeroResults "getDbUserById" ret
 
-listDbUsers :: (PostgreSql :> es) => Eff es [User]
-listDbUsers = do
+listDbUsers :: (Otel :> es, PostgreSql :> es) => Eff es [User]
+listDbUsers = traceInternal_ "listDbUsers" $ do
   query_
     [sql| SELECT
         id,
@@ -100,8 +105,8 @@ listDbUsers = do
     FROM users
     |]
 
-deleteDbUser :: (PostgreSql :> es) => UserId -> Eff es ()
-deleteDbUser userId = do
+deleteDbUser :: (Otel :> es, PostgreSql :> es) => UserId -> Eff es ()
+deleteDbUser userId = traceInternal_ "deleteDbUser" $ do
   ret <-
     execute
       [sql| DELETE FROM users WHERE id = ?
@@ -109,11 +114,9 @@ deleteDbUser userId = do
       (SQL.Only userId)
   expectOneAction "deleteDBUsers" ret
 
-insertEpisode :: (PostgreSql :> es, IOE :> es) => CreateEpisode -> Eff es ()
-insertEpisode CreateEpisode {..} = do
-  -- TODO: Add logging
-  liftIO $ putStrLn "inserting anime"
-  ret <-
+insertEpisode :: (Otel :> es, PostgreSql :> es) => CreateEpisode -> Eff es ()
+insertEpisode CreateEpisode {..} = traceInternal_ "insertEpisode" $ do
+  ret <- traceInternal_ "inserting anime" $
     returning
       [sql| INSERT INTO animes (
         title,
@@ -127,8 +130,7 @@ insertEpisode CreateEpisode {..} = do
     |]
       [(title, imageUrl, animeUrl)]
   animeId <- SQL.fromOnly @AnimeId <$> expectOneResult "insertAnime" ret
-  liftIO $ putStrLn "inserting episode"
-  ret2 <-
+  ret2 <- traceInternal_ "inserting episode" $
     execute
       [sql| INSERT INTO episodes (
         url,
@@ -139,12 +141,11 @@ insertEpisode CreateEpisode {..} = do
     ON CONFLICT (url) DO UPDATE SET url = excluded.url
     |]
       (url, number, animeId)
-  expectOneAction "insertAnime" ret2
+  expectOneAction "insertEpisode" ret2
 
-listAnimes :: (PostgreSql :> es, IOE :> es) => Eff es [Anime]
-listAnimes = do
+listAnimes :: (Otel :> es, PostgreSql :> es) => Eff es [Anime]
+listAnimes = traceInternal_ "listAnimes" $ do
   -- TODO: Add logging
-  liftIO $ putStrLn "listAnimes"
   query_
     [sql| SELECT
         id,
@@ -156,8 +157,8 @@ listAnimes = do
     ORDER by date DESC
     |]
 
-selectUserByEmail :: (PostgreSql :> es) => Text -> Eff es (Maybe User)
-selectUserByEmail email = do
+selectUserByEmail :: (Otel :> es, PostgreSql :> es) => Text -> Eff es (Maybe User)
+selectUserByEmail email = traceInternal_ "selectUserByEmail" $ do
   ret <-
     query
       [sql| SELECT
@@ -170,12 +171,11 @@ selectUserByEmail email = do
     WHERE email = ?
     |]
       (SQL.Only email)
-  expecOneOrZeroResults "getDbUser" ret
+  expecOneOrZeroResults "selectUserByEmail" ret
 
-listEpisodesByChannelId :: (PostgreSql :> es, IOE :> es) => UUID -> Eff es [Episode]
-listEpisodesByChannelId channelId = do
-  liftIO $ putStrLn "listEpisodesByChannelId"
-  ret <-
+listEpisodesByChannelId :: (Otel :> es, PostgreSql :> es) => UUID -> Eff es [Episode]
+listEpisodesByChannelId channelId = traceInternal_ "listEpisodesByChannelId" $ do
+  ret <- traceInternal_ "selectUserIdByChannelId" $
     query
       [sql| SELECT
         id
@@ -184,7 +184,7 @@ listEpisodesByChannelId channelId = do
     |]
       (SQL.Only channelId)
   userId <- expectOneResult @(SQL.Only UUID) "selectUserIdByChannelId" ret
-  query
+  traceInternal_ "selectEpisodesByUser" $ query
     [sql| SELECT
         a.title,
         e.url,
@@ -202,9 +202,8 @@ listEpisodesByChannelId channelId = do
     |]
     userId
 
-insertUserFollows :: (PostgreSql :> es, IOE :> es) => CreateUserFollows -> Eff es ()
-insertUserFollows CreateUserFollows {..} = do
-  liftIO $ putStrLn "insertUserFollows"
+insertUserFollows :: (Otel :> es, PostgreSql :> es) => CreateUserFollows -> Eff es ()
+insertUserFollows CreateUserFollows {..} = traceInternal_ "insertUserFollows" $ do
   void $
     execute
       [sql| INSERT INTO user_follows (
@@ -216,19 +215,16 @@ insertUserFollows CreateUserFollows {..} = do
     |]
       (animeId, userId)
 
-deleteUserFollows :: (PostgreSql :> es, IOE :> es) => DeleteUserFollows -> Eff es ()
-deleteUserFollows DeleteUserFollows {..} = do
-  liftIO $ putStrLn "deleteUserFollows"
+deleteUserFollows :: (Otel :> es, PostgreSql :> es) => DeleteUserFollows -> Eff es ()
+deleteUserFollows DeleteUserFollows {..} = traceInternal_ "deleteUserFollows" $ do
   void $
     execute
       [sql| DELETE FROM user_follows WHERE user_id = ? AND anime_id = ?
     |]
       (userId, animeId)
 
-listUserRelatedAnime :: (PostgreSql :> es, IOE :> es) => UserId -> SubParam -> Maybe Text -> Eff es [UserRelatedAnime]
-listUserRelatedAnime userId subParam mSearch = do
-  liftIO $ putStrLn "listUserRelatedAnime"
-  liftIO $ print select
+listUserRelatedAnime :: (Otel :> es, PostgreSql :> es) => UserId -> SubParam -> Maybe Text -> Eff es [UserRelatedAnime]
+listUserRelatedAnime userId subParam mSearch = traceInternal_ "listUserRelatedAnime" $ do
   case mNormalizedSearch of
     Just search -> query select (userId, search)
     Nothing -> query select (SQL.Only userId)
@@ -285,9 +281,8 @@ listUserRelatedAnime userId subParam mSearch = do
       Nothing -> Nothing
 
 -- TODO: Session should have some timeout...
-selectUserBySession :: (IOE :> es, PostgreSql :> es) => UUID -> Eff es (Maybe UserId)
-selectUserBySession session = do
-  liftIO $ putStrLn "selectUserBySession"
+selectUserBySession :: (Otel :> es, PostgreSql :> es) => UUID -> Eff es (Maybe UserId)
+selectUserBySession session = traceInternal_ "selectUserBySession" $ do
   ret <-
     query
       [sql| SELECT
@@ -296,12 +291,10 @@ selectUserBySession session = do
     WHERE id = ?
     |]
       (SQL.Only session)
-  liftIO $ print ret
-  expecOneOrZeroResults "getDbUser" $ fmap SQL.fromOnly ret
+  expecOneOrZeroResults "selectUserBySession" $ fmap SQL.fromOnly ret
 
-insertUserSession :: (IOE :> es, PostgreSql :> es) => UserId -> Eff es (Maybe SessionId)
-insertUserSession userId = do
-  liftIO $ putStrLn "insertUserSession"
+insertUserSession :: (Otel :> es, PostgreSql :> es) => UserId -> Eff es (Maybe SessionId)
+insertUserSession userId = traceInternal_ "insertUserSession" $ do
   ret <-
     returning
       [sql| INSERT INTO sessions (
@@ -312,5 +305,29 @@ insertUserSession userId = do
         id
     |]
       [SQL.Only userId]
-  liftIO $ print ret
-  expecOneOrZeroResults "createDbUser" $ fmap SQL.fromOnly ret
+  expecOneOrZeroResults "insertUserSession" $ fmap SQL.fromOnly ret
+
+upsertGogoAnimeUrl :: (Otel :> es, PostgreSql :> es) => Text -> Eff es (Maybe SessionId)
+upsertGogoAnimeUrl url = traceInternal_ "insertGogoAnimeUrl" $ do
+  ret <-
+    returning
+      [sql| INSERT INTO state (
+        key,
+        value
+    )
+    VALUES ("gogoanime_url", ?)
+    ON CONFLICT (key) DO UPDATE SET value = excluded.value
+    RETURNING
+        value
+    |]
+      [SQL.Only url]
+  expecOneOrZeroResults "upsertGogoAnimeUrl" $ fmap SQL.fromOnly ret
+
+selectGogoAnimeUrl :: (Otel :> es, PostgreSql :> es) => Eff es URI
+selectGogoAnimeUrl = traceInternal_ "insertGogoAnimeUrl" $ do
+  ret <-
+    query_
+      [sql| SELECT value FROM state WHERE key = 'gogoanime_url'
+    |]
+  urlString <- expectOneResult "selectGogoAnimeUrl" $ fmap SQL.fromOnly ret
+  maybe (throwM . invalidValue "insertGogoAnimeUrl" $ T.pack urlString) pure $ parseURI urlString

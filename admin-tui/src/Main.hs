@@ -1,8 +1,10 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 {-# HLINT ignore "Use null" #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 module Main (main) where
 
+import Otel.Effect (runOtelNoop)
 import AnimeRss.DataModel.Migrations (migrateAll)
 import AnimeRss.DataModel.Queries (
   deleteDbUser,
@@ -240,7 +242,7 @@ handleEvents event = do
           case L.listSelectedElement userList of
             Nothing -> pure ()
             Just (i, UserInfo {..}) -> do
-              void . liftIO . runEff . runDBESingle dbConnection $ deleteDbUser id
+              void . liftIO . runEff . runOtelNoop . runDBESingle dbConnection $ deleteDbUser id
               modify (L.listRemove i)
       VtyEvent ev -> zoom (toLensVL #userList) $ L.handleListEvent ev
       _ -> pure ()
@@ -259,7 +261,7 @@ handleEvents event = do
         if nameCheck && emailCheck && passwordEmpty && passwordCheck
           then do
             newUser' <- toCreateUser newUser
-            maybeUser <- liftIO . runEff . runDBESingle (s ^. #dbConnection) $ insertDbUser newUser'
+            maybeUser <- liftIO . runEff . runOtelNoop . runDBESingle (s ^. #dbConnection) $ insertDbUser newUser'
             case maybeUser of
               Nothing ->
                 #stage .= Error "User with given email already exists." s
@@ -330,7 +332,7 @@ main = do
   Configuration {..} <- execParser options
   dbConnection <- SQL.connectPostgreSQL (pack databaseConnectionString)
   migrateAll dbConnection
-  userList <- runEff . runDBESingle dbConnection $ listDbUsers
+  userList <- runEff . runOtelNoop . runDBESingle dbConnection $ listDbUsers
 
   let f =
         AppState dbConnection UserList $

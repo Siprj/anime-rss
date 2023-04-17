@@ -11,6 +11,7 @@ module AnimeRss.DataModel.Types (
   Error (..),
   unexpectedAmountOfResults,
   unexpectedAmountOfActions,
+  invalidValue,
   DbPasswordHash (..),
   toPasswordHash,
   UserRelatedAnime (..),
@@ -31,6 +32,7 @@ import Relude hiding (id)
 data Error
   = UnexpectedAmountOfActions UnexpectedAmountOfActionsData
   | UnexpectedAmountOfResults UnexpectedAmountOfResultsData
+  | InvalidValue InvalidValueData
   deriving stock (Show)
 
 instance Exception Error
@@ -56,6 +58,15 @@ data UnexpectedAmountOfResultsData = UnexpectedAmountOfResultsData
 
 unexpectedAmountOfResults :: Text -> Int -> Int -> Int -> Error
 unexpectedAmountOfResults origin expectedMininumCount expectedMaximumCount count = UnexpectedAmountOfResults $ UnexpectedAmountOfResultsData {..}
+
+data InvalidValueData = InvalidValueData
+  { origin :: Text
+  , value :: Text
+  }
+  deriving stock (Show, Generic)
+
+invalidValue :: Text -> Text -> Error
+invalidValue origin value = InvalidValue $ InvalidValueData {..}
 
 data Episode = Episode
   { title :: Text
@@ -96,8 +107,8 @@ data User = User
 data Anime = Anime
   { id :: AnimeId
   , title :: Text
-  , imgUrl :: Text
-  , url :: Text
+  , imgUrl :: Url
+  , url :: Url
   , date :: UTCTime
   }
   deriving stock (Show, Generic)

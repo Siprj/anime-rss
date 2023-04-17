@@ -1,13 +1,10 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module AnimeRss.Scraper.Parser.Gogoanime (
   getEntrisFromFronPage,
-  gogoanimeUrl,
 ) where
 
 import AnimeRss.DataModel.Types (CreateEpisode (..))
@@ -28,7 +25,6 @@ import Data.Semigroup ((<>))
 import Data.String (String)
 import Data.Text (pack)
 import Network.URI (URI, parseRelativeReference, parseURI, relativeTo)
-import Network.URI.Static (staticURI)
 import Network.Wreq (get, responseBody)
 import Optics (lensVL, view)
 import System.IO (IO)
@@ -43,9 +39,6 @@ import Text.XML.HXT.Core (
   hasName,
   runX,
  )
-
-gogoanimeUrl :: URI
-gogoanimeUrl = $$(staticURI "https://gogoanime.gr/")
 
 -- TODO: Save how many episodes was parsed and try use this information to
 -- determine that parser failed.
