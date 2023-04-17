@@ -1,13 +1,13 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 
 module Main (main) where
 
@@ -20,41 +20,47 @@ module Main (main) where
 
 import AnimeRss.DataModel.Migrations (migrateAll)
 import AnimeRss.Rest.Api (Api)
+import AnimeRss.Rest.Server (
+  AuthSessionHandler,
+  Context (Context),
+  apiHander,
+  authHandlerSession,
+ )
 import AnimeRss.Scraper.Service (runScraper)
+import Configuration (
+  Configuration (Configuration, databaseConnectionString, logEnpoint, traceEndpoint),
+  getConfiguration,
+ )
 import Control.Applicative (pure)
 import Control.Monad (forever, void)
 import DBE (createConnectionPool, runDBE)
 import Data.Either (either)
 import Data.Function (($), (.))
+import Data.Maybe (Maybe (Just, Nothing), maybe)
+import Data.Monoid (mempty)
 import Data.Pool (withResource)
 import Data.Proxy (Proxy (Proxy))
+import Data.Vector (singleton)
 import Effectful (MonadIO (liftIO), runEff)
 import Effectful.Concurrent (forkIO, runConcurrent)
 import Effectful.Error.Dynamic (runErrorNoCallStack)
 import Effectful.Reader.Dynamic (runReader)
 import Network.URI (URI)
 import Network.URI.Static (staticURI)
-import Network.Wai.Handler.Warp (runSettings, setInstallShutdownHandler, defaultSettings, setPort)
+import Network.Wai.Handler.Warp (defaultSettings, runSettings, setInstallShutdownHandler, setPort)
+import Optics ((&), (.~))
+import Otel.Client (OtelClientParameters (logEnpoint, traceEndpoint), defautOtelClientParameters, startOtelClient)
+import Otel.Effect (runOtel, spanLink)
+import Otel.Type (SpanKind (Internal), TraceData (TraceData))
+import ResourceAttributes (resourceAttributes)
 import Servant (Context (EmptyContext, (:.)), HasServer (hoistServerWithContext), serveWithContext, throwError)
 import System.IO (IO)
-import AnimeRss.Rest.Server
-    ( Context(Context),
-      AuthSessionHandler,
-      authHandlerSession,
-      apiHander )
-import Otel.Client ( defautOtelClientParameters, startOtelClient, OtelClientParameters(logEnpoint, traceEndpoint))
-import ResourceAttributes (resourceAttributes)
-import Data.Maybe ( Maybe(Just, Nothing), maybe )
-import Otel.Effect (runOtel, spanLink)
-import Otel.Type ( TraceData(TraceData), SpanKind(Internal) )
-import Data.Monoid (mempty)
-import Configuration
-    ( Configuration(Configuration, databaseConnectionString, logEnpoint, traceEndpoint),
-      getConfiguration )
-import Optics ( (&), (.~) )
-import System.Posix.Signals
-    ( installHandler, sigINT, sigTERM, Handler(Catch) )
-import Data.Vector (singleton)
+import System.Posix.Signals (
+  Handler (Catch),
+  installHandler,
+  sigINT,
+  sigTERM,
+ )
 
 -- FIXME: This and other hardoced URLs need to be dynamic and need to be sotred
 -- in the DB.
@@ -64,7 +70,7 @@ baseUrl = $$(staticURI "https://gogoanime.sk/")
 main :: IO ()
 main = do
   resourceAttributes' <- resourceAttributes
-  Configuration{..} <- getConfiguration
+  Configuration {..} <- getConfiguration
   otelClient <- startOtelClient resourceAttributes' (defautOtelClientParameters & #logEnpoint .~ logEnpoint & #traceEndpoint .~ traceEndpoint)
   runEff . runConcurrent . runOtel otelClient (Just $ TraceData "Main" Internal mempty mempty) $ do
     dbPool <- createConnectionPool databaseConnectionString

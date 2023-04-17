@@ -18,18 +18,24 @@ module AnimeRss.Rest.Server (
   AuthSessionHandler,
 ) where
 
-import AnimeRss.DataModel.Queries (deleteUserFollows, getDbUserById, insertUserFollows, listAnimes, listEpisodesByChannelId, listUserRelatedAnime, selectUserByEmail, selectUserBySession, insertUserSession)
+import AnimeRss.DataModel.Queries (deleteUserFollows, getDbUserById, insertUserFollows, insertUserSession, listAnimes, listEpisodesByChannelId, listUserRelatedAnime, selectUserByEmail, selectUserBySession)
 import AnimeRss.DataModel.Types (CreateUserFollows (..), DeleteUserFollows (..), toPasswordHash)
 import AnimeRss.DataModel.Types qualified as Core
+import AnimeRss.Ids (fromId)
 import AnimeRss.Rest.Api (Anime (..), Api, ChannelId, LoggedInUser (LoggedInUser, userId), Login (..), PostAnimeFollow (..), Protected, SubParam (..), User (..))
+import AnimeRss.Rest.Auth
 import AnimeRss.Rest.Authentication ()
 import Control.Applicative (pure)
-import Control.Monad ((>>=), Monad ((>>)))
+import Control.Monad (Monad ((>>)), (>>=))
 import Crypto.Error (CryptoFailable (..))
 import Crypto.PasswordStore
 import DBE (PostgreSql)
+import Data.Bool (Bool (True))
+import Data.ByteString hiding (pack, unpack)
+import Data.CaseInsensitive qualified as CI
 import Data.Function (($), (.))
 import Data.Functor (fmap)
+import Data.List
 import Data.Maybe (Maybe (Just, Nothing), fromMaybe, maybe)
 import Data.Monoid ((<>))
 import Data.Text (Text, pack)
@@ -40,11 +46,18 @@ import Data.Time (
   formatTime,
   rfc822DateFormat,
  )
+import Data.UUID (fromASCIIBytes, toASCIIBytes)
+import Data.UUID.V4 (nextRandom)
 import Effectful (Eff, IOE, MonadIO (..), (:>))
 import Effectful.Error.Dynamic (Error, throwError)
 import Effectful.Reader.Dynamic (Reader, ask)
+import Network.HTTP.Types (hCookie)
+import Network.Wai
+import Otel.Effect
+import Otel.Type
 import Relude (show, unless, (==))
-import Servant (Header, Headers, NoContent (NoContent), ServerError, ServerT, URI, err401, err409, (:<|>) ((:<|>)), addHeader, err500)
+import Servant (Header, Headers, NoContent (NoContent), ServerError, ServerT, URI, addHeader, err401, err409, err500, (:<|>) ((:<|>)))
+import Servant.Server (Handler)
 import Text.Atom.Feed (
   Entry (entryLinks, entrySummary),
   TextContent (HTMLString, TextString),
@@ -57,22 +70,10 @@ import Text.Atom.Feed (
 import Text.Atom.Feed qualified as Atom (Feed)
 import Text.Feed.Constructor (feedFromAtom)
 import Text.Feed.Types (Feed)
-import AnimeRss.Rest.Auth
-import Network.Wai
-import Servant.Server (Handler)
-import Data.ByteString hiding (pack, unpack)
 import Web.Cookie
-import Data.List
-import Network.HTTP.Types (hCookie)
-import Data.CaseInsensitive qualified as CI
-import Data.UUID (fromASCIIBytes, toASCIIBytes)
-import AnimeRss.Ids (fromId)
-import Data.UUID.V4 (nextRandom)
-import Data.Bool (Bool(True))
-import Otel.Effect
-import Otel.Type
 
 type instance APIAuthServerData (APIAuthProtect "session") = LoggedInUser
+
 type instance APIAuthServerDataCookies (APIAuthProtect "session") = ZeroCookies
 
 type AuthSessionHandler = APIAuthHandler Request LoggedInUser ZeroCookies
@@ -84,7 +85,7 @@ sessionName :: ByteString
 sessionName = "session"
 
 authHandlerSession :: (Error ServerError :> es, PostgreSql :> es, Otel :> es) => (Eff es (LoggedInUser, SetCookieList ZeroCookies) -> Handler (LoggedInUser, SetCookieList ZeroCookies)) -> AuthSessionHandler
-authHandlerSession runEffectStack  = mkAPIAuthHandler handler
+authHandlerSession runEffectStack = mkAPIAuthHandler handler
   where
     handler :: Request -> Handler (LoggedInUser, SetCookieList ZeroCookies)
     handler req = runEffectStack . traceInternal_ "authHandlerSession" $ do
@@ -180,9 +181,9 @@ loginHandler Login {..} = traceInternal_ "loginHandler" $ do
       logError_ $ show e
       throwError err401
   sessionId <- insertUserSession user.id >>= maybe (throwError err500) pure
-  let sessionCookie = defaultSetCookie { setCookieName = sessionName, setCookieValue = encodeUtf8 . fromId $ sessionId, setCookieHttpOnly = True, setCookiePath = Just "/" }
+  let sessionCookie = defaultSetCookie {setCookieName = sessionName, setCookieValue = encodeUtf8 . fromId $ sessionId, setCookieHttpOnly = True, setCookiePath = Just "/"}
   xtokenUUID <- liftIO nextRandom
-  let xtokenCookie = defaultSetCookie { setCookieName = xTokenName, setCookieValue = toASCIIBytes xtokenUUID, setCookiePath = Just "/" }
+  let xtokenCookie = defaultSetCookie {setCookieName = xTokenName, setCookieValue = toASCIIBytes xtokenUUID, setCookiePath = Just "/"}
   pure . addHeader sessionCookie . addHeader xtokenCookie $ NoContent
 
 atomEpisodesGetHandler :: (Handler' es, Otel :> es) => ChannelId -> Eff es Feed

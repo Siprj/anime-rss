@@ -15,7 +15,7 @@ module AnimeRss.DataModel.Queries (
   selectUserBySession,
   insertUserSession,
   upsertGogoAnimeUrl,
-  selectGogoAnimeUrl
+  selectGogoAnimeUrl,
 ) where
 
 import AnimeRss.DataModel.Types
@@ -25,14 +25,14 @@ import Control.Monad.Catch
 import DBE
 import Data.List hiding (null)
 import Data.Text (null)
+import Data.Text qualified as T
 import Data.UUID (UUID)
 import Database.PostgreSQL.Simple qualified as SQL
 import Database.PostgreSQL.Simple.SqlQQ (sql)
 import Effectful
-import Relude hiding (All, head, id, null)
-import Otel.Effect
 import Network.URI (URI, parseURI)
-import Data.Text qualified as T
+import Otel.Effect
+import Relude hiding (All, head, id, null)
 
 expecOneOrZeroResults :: Text -> [a] -> Eff es (Maybe a)
 expecOneOrZeroResults origin values = do
@@ -116,9 +116,10 @@ deleteDbUser userId = traceInternal_ "deleteDbUser" $ do
 
 insertEpisode :: (Otel :> es, PostgreSql :> es) => CreateEpisode -> Eff es ()
 insertEpisode CreateEpisode {..} = traceInternal_ "insertEpisode" $ do
-  ret <- traceInternal_ "inserting anime" $
-    returning
-      [sql| INSERT INTO animes (
+  ret <-
+    traceInternal_ "inserting anime" $
+      returning
+        [sql| INSERT INTO animes (
         title,
         image_url,
         url
@@ -128,11 +129,12 @@ insertEpisode CreateEpisode {..} = traceInternal_ "insertEpisode" $ do
     RETURNING
         id
     |]
-      [(title, imageUrl, animeUrl)]
+        [(title, imageUrl, animeUrl)]
   animeId <- SQL.fromOnly @AnimeId <$> expectOneResult "insertAnime" ret
-  ret2 <- traceInternal_ "inserting episode" $
-    execute
-      [sql| INSERT INTO episodes (
+  ret2 <-
+    traceInternal_ "inserting episode" $
+      execute
+        [sql| INSERT INTO episodes (
         url,
         number,
         anime_id
@@ -140,7 +142,7 @@ insertEpisode CreateEpisode {..} = traceInternal_ "insertEpisode" $ do
     VALUES (?,?,?)
     ON CONFLICT (url) DO UPDATE SET url = excluded.url
     |]
-      (url, number, animeId)
+        (url, number, animeId)
   expectOneAction "insertEpisode" ret2
 
 listAnimes :: (Otel :> es, PostgreSql :> es) => Eff es [Anime]
@@ -175,17 +177,19 @@ selectUserByEmail email = traceInternal_ "selectUserByEmail" $ do
 
 listEpisodesByChannelId :: (Otel :> es, PostgreSql :> es) => UUID -> Eff es [Episode]
 listEpisodesByChannelId channelId = traceInternal_ "listEpisodesByChannelId" $ do
-  ret <- traceInternal_ "selectUserIdByChannelId" $
-    query
-      [sql| SELECT
+  ret <-
+    traceInternal_ "selectUserIdByChannelId" $
+      query
+        [sql| SELECT
         id
     FROM users
     WHERE news_channel = ?
     |]
-      (SQL.Only channelId)
+        (SQL.Only channelId)
   userId <- expectOneResult @(SQL.Only UUID) "selectUserIdByChannelId" ret
-  traceInternal_ "selectEpisodesByUser" $ query
-    [sql| SELECT
+  traceInternal_ "selectEpisodesByUser" $
+    query
+      [sql| SELECT
         a.title,
         e.url,
         e.number,
@@ -200,7 +204,7 @@ listEpisodesByChannelId channelId = traceInternal_ "listEpisodesByChannelId" $ d
     ORDER BY e.date DESC
     LIMIT 500
     |]
-    userId
+      userId
 
 insertUserFollows :: (Otel :> es, PostgreSql :> es) => CreateUserFollows -> Eff es ()
 insertUserFollows CreateUserFollows {..} = traceInternal_ "insertUserFollows" $ do

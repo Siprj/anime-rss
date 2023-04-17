@@ -1,62 +1,57 @@
-cabal-version:  3.6
-name:           anime-rss-admin-tui
-version:        0.1.0.0
-synopsis:       Rss feed generator for gogoanime.io
-description:    Please see the README on Github at  <https://github.com/Siprj/anime-rss#readme>
-category:       Web
-homepage:       https://github.com/Siprj/gogoanime-rss#readme
-bug-reports:    https://github.com/Siprj/gogoanime-rss/issues
-author:         Jan Sipr
-maintainer:     sipr.jan@gmail.com
-copyright:      2018 Jan Sipr
-license:        BSD-3-Clause
-license-file:   LICENSE
-build-type:     Simple
+cabal-version:      3.6
+name:               anime-rss-admin-tui
+version:            0.1.0.0
+synopsis:           Rss feed generator for gogoanime.io
+description:
+  Please see the README on Github at  <https://github.com/Siprj/anime-rss#readme>
+
+category:           Web
+homepage:           https://github.com/Siprj/gogoanime-rss#readme
+bug-reports:        https://github.com/Siprj/gogoanime-rss/issues
+author:             Jan Sipr
+maintainer:         sipr.jan@gmail.com
+copyright:          2018 Jan Sipr
+license:            BSD-3-Clause
+license-file:       LICENSE
+build-type:         Simple
 extra-source-files:
-    README.md
-    ChangeLog.md
+  ChangeLog.md
+  README.md
 
 source-repository head
-  type: git
+  type:     git
   location: https://github.com/Siprj/gogoanime-rss
 
 flag pedantic
   description: Pass additional warning flags and -Werror to GHC.
-  manual: True
-  default: True
+  manual:      True
+  default:     True
 
 common common-stanza
-    default-language: GHC2021
-    default-extensions:
-      DataKinds
-      DerivingStrategies
-      DuplicateRecordFields
-      LambdaCase
-      NoImplicitPrelude
-      OverloadedLabels
-      OverloadedStrings
-      RecordWildCards
+  default-language:   GHC2021
+  default-extensions:
+    NoImplicitPrelude
+    DataKinds
+    DerivingStrategies
+    DuplicateRecordFields
+    LambdaCase
+    OverloadedLabels
+    OverloadedStrings
+    RecordWildCards
 
 executable admin-tui
-  import: common-stanza
-
-  main-is: Main.hs
-  hs-source-dirs:
-      src
-  other-modules:
-      Options
+  import:         common-stanza
+  main-is:        Main.hs
+  hs-source-dirs: src
+  other-modules:  Options
   ghc-options:
-      -Wall
-      -Wmissing-export-lists
-      -Wredundant-constraints
-      -Wmissing-deriving-strategies
-      -threaded
-      -rtsopts -with-rtsopts=-N
+    -Wall -Wmissing-export-lists -Wredundant-constraints
+    -Wmissing-deriving-strategies -threaded -rtsopts -with-rtsopts=-N
+
   build-depends:
-      HandsomeSoup
     , anime-rss-backend
     , attoparsec
-    , base >=4.7 && <5
+    , base                  >=4.7 && <5
     , brick
     , bytestring
     , cereal
@@ -64,13 +59,15 @@ executable admin-tui
     , containers
     , cryptonite
     , data-default
+    , effectful-core
+    , exceptions
     , feed
     , freer-effects
+    , HandsomeSoup
     , haskell-src-exts
     , haskell-src-meta
-    , relude
-    , http-media
     , http-api-data
+    , http-media
     , hxt
     , hxt-css
     , megaparsec
@@ -79,12 +76,13 @@ executable admin-tui
     , network-uri
     , optics
     , optparse-applicative
+    , otel-haskell-sdk
     , parser-combinators
     , postgresql-simple
     , pretty-simple
+    , relude
     , safecopy
     , servant
-    , exceptions
     , servant-auth
     , servant-auth-server
     , servant-server
@@ -100,7 +98,6 @@ executable admin-tui
     , wreq
     , xml
     , xml-conduit
-    , effectful-core
-    , otel-haskell-sdk
+
   if flag(pedantic)
     ghc-options: -Werror

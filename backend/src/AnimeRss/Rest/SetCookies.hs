@@ -1,22 +1,22 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-module AnimeRss.Rest.SetCookies
-  ( SetCookies
-  , SetCookiesNumber
-  , CookiesSetter
-  , mkCookiesSetter
-  ) where
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
+module AnimeRss.Rest.SetCookies (
+  SetCookies,
+  SetCookiesNumber,
+  CookiesSetter,
+  mkCookiesSetter,
+) where
+
+import AnimeRss.Rest.Cookies
+import Data.Functor
 import Data.Proxy (Proxy (..))
+import GHC.Generics
 import Network.Wai (Request)
 import Servant.API
 import Servant.Server
 import Servant.Server.Internal.Delayed (passToServer)
-
-import AnimeRss.Rest.Cookies
-import GHC.Generics
-import Data.Functor
 
 data SetCookies (tag :: k)
 
@@ -37,8 +37,8 @@ instance
   , HasServer apiWithCookies context
   , HasContextEntry context (CookiesSetter Request cookieNumber)
   , AddSetCookies cookieNumber (ServerT api Handler) (ServerT apiWithCookies Handler)
-  )
-  => HasServer (SetCookies tag :> api) context
+  ) =>
+  HasServer (SetCookies tag :> api) context
   where
   type ServerT (SetCookies tag :> api) m = ServerT api m
 
@@ -53,8 +53,8 @@ instance
       getCookies :: Request -> SetCookieList cookieNumber
       getCookies = getSetCookiesList (getContextEntry context)
 
-      setCookies
-        :: ServerT api Handler
-        -> SetCookieList cookieNumber
-        -> ServerT apiWithCookies Handler
+      setCookies ::
+        ServerT api Handler ->
+        SetCookieList cookieNumber ->
+        ServerT apiWithCookies Handler
       setCookies fn cookies = addSetCookies cookies fn

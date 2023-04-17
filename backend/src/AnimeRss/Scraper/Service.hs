@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -8,7 +9,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE BlockArguments #-}
 
 module AnimeRss.Scraper.Service (
   runScraper,
@@ -17,29 +17,30 @@ module AnimeRss.Scraper.Service (
 import AnimeRss.DataModel.Queries (insertEpisode, selectGogoAnimeUrl, upsertGogoAnimeUrl)
 import AnimeRss.Scraper.Parser.Gogoanime (getEntrisFromFronPage)
 import Control.Concurrent (threadDelay)
+import Control.Exception (SomeException)
 import Control.Monad (mapM_)
+import Control.Monad.Catch (handle)
 import DBE (PostgreSql, withTransaction)
 import Data.Function (($), (.))
+import Data.Functor (void)
 import Data.Int (Int)
-import Effectful (Eff, IOE, liftIO, (:>))
-import Otel.Effect
-import Otel.Type
-import Control.Monad.Catch (handle)
-import Text.Show (show)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
-import Control.Exception (SomeException)
+import Effectful (Eff, IOE, liftIO, (:>))
+import Network.HTTP.Client hiding (hrFinalRequest)
 import Network.Wreq
 import Optics
-import Data.Functor (void)
-import Network.HTTP.Client hiding (hrFinalRequest)
+import Otel.Effect
+import Otel.Type
+import Text.Show (show)
 
 scraperScope :: Scope "scraper" "0.0.0"
 scraperScope = Scope
 
 runScraper :: (Otel :> es, PostgreSql :> es, IOE :> es) => Int -> Eff es ()
-runScraper time = handle (\exception -> logError [KeyValue "exception" . StringV . T.pack $ show @SomeException  exception] "exception during the scraping")
-  . withInstrumentationScope scraperScope $ do
+runScraper time = handle (\exception -> logError [KeyValue "exception" . StringV . T.pack $ show @SomeException exception] "exception during the scraping")
+  . withInstrumentationScope scraperScope
+  $ do
     -- TODO: Add exception handling...
     logInfo_ "requesting data from gogoanime"
     gogoAnimeUrl <- selectGogoAnimeUrl

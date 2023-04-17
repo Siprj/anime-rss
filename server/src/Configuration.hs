@@ -1,27 +1,26 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE DeriveGeneric #-}
-module Configuration
-  ( getConfiguration
-  , Configuration(..)
-  )
-where
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-import System.Environment (lookupEnv)
-import Text.Show (Show)
-import Data.String (String)
-import System.IO (IO)
-import Data.Maybe (maybe)
+module Configuration (
+  getConfiguration,
+  Configuration (..),
+) where
+
 import Control.Applicative (pure, (<$>))
-import Control.Monad ( Monad((>>=)), MonadFail(fail) )
-import Data.Function ( ($))
-import Data.Semigroup ( Semigroup((<>)) )
+import Control.Monad (Monad ((>>=)), MonadFail (fail))
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
+import Data.Function (($))
+import Data.Maybe (maybe)
+import Data.Semigroup (Semigroup ((<>)))
+import Data.String (String)
 import GHC.Generics (Generic)
-
+import System.Environment (lookupEnv)
+import System.IO (IO)
+import Text.Show (Show)
 
 data Configuration = Configuration
   { databaseConnectionString :: BS.ByteString
@@ -41,4 +40,4 @@ getConfiguration = do
   databaseConnectionString <- BSC.pack <$> getEnv' "DATABASE_CONNECTION_STRING"
   logEnpoint <- getEnv' "OTEL_LOG_ENDPOINT"
   traceEndpoint <- getEnv' "OTEL_TRACE_ENDPOINT"
-  pure Configuration{..}
+  pure Configuration {..}

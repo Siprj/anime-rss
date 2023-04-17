@@ -1,104 +1,104 @@
-cabal-version:  3.6
-name:           anime-rss-backend
-version:        0.1.0.0
-synopsis:       Rss feed generator for gogoanime.io
-description:    Please see the README on Github at  <https://github.com/Siprj/anime-rss#readme>
-category:       Web
-homepage:       https://github.com/Siprj/gogoanime-rss#readme
-bug-reports:    https://github.com/Siprj/gogoanime-rss/issues
-author:         Jan Sipr
-maintainer:     sipr.jan@gmail.com
-copyright:      2022 Jan Sipr
-license:        BSD-3-Clause
-license-file:   LICENSE
-build-type:     Simple
+cabal-version:      3.6
+name:               anime-rss-backend
+version:            0.1.0.0
+synopsis:           Rss feed generator for gogoanime.io
+description:
+  Please see the README on Github at  <https://github.com/Siprj/anime-rss#readme>
+
+category:           Web
+homepage:           https://github.com/Siprj/gogoanime-rss#readme
+bug-reports:        https://github.com/Siprj/gogoanime-rss/issues
+author:             Jan Sipr
+maintainer:         sipr.jan@gmail.com
+copyright:          2022 Jan Sipr
+license:            BSD-3-Clause
+license-file:       LICENSE
+build-type:         Simple
 extra-source-files:
 
 source-repository head
-  type: git
+  type:     git
   location: https://github.com/Siprj/gogoanime-rss
 
 flag pedantic
   description: Pass additional warning flags and -Werror to GHC.
-  manual: True
-  default: True
+  manual:      True
+  default:     True
 
 common common-stanza
-    default-language: GHC2021
-    default-extensions:
-      NoImplicitPrelude
-      DataKinds
-      TypeOperators
-      DerivingStrategies
-      OverloadedStrings
-      RecordWildCards
-      DuplicateRecordFields
+  default-language:   GHC2021
+  default-extensions:
+    NoImplicitPrelude
+    DataKinds
+    DerivingStrategies
+    DuplicateRecordFields
+    OverloadedStrings
+    RecordWildCards
+    TypeOperators
 
 library
-  import: common-stanza
-
+  import:          common-stanza
   exposed-modules:
-      AnimeRss.DataModel.Migrations
-      AnimeRss.DataModel.Queries
-      AnimeRss.DataModel.Types
-      AnimeRss.Ids
-      AnimeRss.Url
-      DBE
-      DBE.Static
-      Crypto.PasswordStore
-      AnimeRss.Scraper.Service
-      AnimeRss.Scraper.Parser.Gogoanime
-      AnimeRss.Rest.Api
-      AnimeRss.Rest.AtomMime
-      AnimeRss.Rest.Authentication
-      AnimeRss.Rest.Server
-      AnimeRss.Rest.Auth
-      AnimeRss.Rest.Cookies
-      AnimeRss.Rest.SetCookies
-  hs-source-dirs:
-      src
+    AnimeRss.DataModel.Migrations
+    AnimeRss.DataModel.Queries
+    AnimeRss.DataModel.Types
+    AnimeRss.Ids
+    AnimeRss.Rest.Api
+    AnimeRss.Rest.AtomMime
+    AnimeRss.Rest.Auth
+    AnimeRss.Rest.Authentication
+    AnimeRss.Rest.Cookies
+    AnimeRss.Rest.Server
+    AnimeRss.Rest.SetCookies
+    AnimeRss.Scraper.Parser.Gogoanime
+    AnimeRss.Scraper.Service
+    AnimeRss.Url
+    Crypto.PasswordStore
+    DBE
+    DBE.Static
+
+  hs-source-dirs:  src
+
   if flag(pedantic)
     ghc-options: -Werror
 
   ghc-options:
-      -Wall
-      -Wmissing-export-lists
-      -Wredundant-constraints
-      -Wmissing-deriving-strategies
+    -Wall -Wmissing-export-lists -Wredundant-constraints
+    -Wmissing-deriving-strategies
 
   build-depends:
-      base >=4.7 && <5
-    , effectful-core
-    , effectful
-    , exceptions
-    , optics
     , aeson
-    , relude
-    , uuid
-    , network-uri
-    , time
+    , base                >=4.7 && <5
     , bytestring
-    , postgresql-simple
-    , resource-pool
-    , drifter-postgresql
-    , drifter
-    , pretty-simple
-    , text
-    , cryptonite
+    , case-insensitive
     , cereal
-    , hxt
-    , wreq
-    , HandsomeSoup
+    , cookie
+    , cryptonite
+    , data-default
+    , drifter
+    , drifter-postgresql
+    , effectful
+    , effectful-core
     , either
+    , exceptions
+    , feed
+    , HandsomeSoup
+    , http-client
+    , http-media
+    , http-types
+    , hxt
+    , network-uri
+    , optics
+    , otel-haskell-sdk
+    , postgresql-simple
+    , pretty-simple
+    , relude
+    , resource-pool
     , servant
     , servant-server
-    , feed
-    , data-default
-    , http-media
-    , xml-conduit
+    , text
+    , time
+    , uuid
     , wai
-    , http-types
-    , cookie
-    , case-insensitive
-    , otel-haskell-sdk
-    , http-client
+    , wreq
+    , xml-conduit

@@ -6,7 +6,7 @@ module AnimeRss.Ids (
   AnimeId,
   EpisodeId,
   UserId,
-  SessionId
+  SessionId,
 ) where
 
 import Data.Aeson (FromJSON, ToJSON)
@@ -30,7 +30,6 @@ type AnimeId = Id 'Anime
 type EpisodeId = Id 'Episode
 
 type UserId = Id 'User
-
 
 type SessionId = Id 'Session
 

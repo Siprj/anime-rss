@@ -3,21 +3,23 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module ResourceAttributes
-  (
-  resourceAttributes)
-where
+module ResourceAttributes (
+  resourceAttributes,
+) where
 
-import Otel.Type
-    ( KeyValue(KeyValue), ResourceAttributes, Value(StringV) )
-import Data.Function (($))
-import System.IO ( IO )
 import Control.Applicative (pure)
-import Data.Text.IO (readFile)
-import System.Environment (lookupEnv)
-import Data.Text (pack)
+import Data.Function (($))
 import Data.Functor ((<$>))
 import Data.Maybe (maybe)
+import Data.Text (pack)
+import Data.Text.IO (readFile)
+import Otel.Type (
+  KeyValue (KeyValue),
+  ResourceAttributes,
+  Value (StringV),
+ )
+import System.Environment (lookupEnv)
+import System.IO (IO)
 
 resourceAttributes :: IO ResourceAttributes
 resourceAttributes = do

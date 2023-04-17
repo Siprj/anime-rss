@@ -31,6 +31,7 @@ module AnimeRss.Rest.Api (
 
 import AnimeRss.Ids (AnimeId, UserId)
 import AnimeRss.Rest.AtomMime (AtomFeed)
+import AnimeRss.Rest.Auth
 import Data.Aeson (FromJSON, ToJSON, defaultOptions, genericParseJSON, genericToEncoding, parseJSON, toEncoding)
 import Data.Bool (Bool)
 import Data.Either (Either (Left, Right))
@@ -45,7 +46,6 @@ import GHC.Generics (Generic)
 import Optics (makeFieldLabelsWith, noPrefixFieldLabels)
 import Servant (NoContent, StdMethod (POST), Verb)
 import Servant.API (Capture, FromHttpApiData (..), Get, Header, Headers, JSON, Post, QueryParam, ReqBody, ToHttpApiData (..), (:<|>), (:>))
-import AnimeRss.Rest.Auth
 import Text.Feed.Types (Feed)
 import Text.Read (Read, readMaybe)
 import Text.Show (Show, show)

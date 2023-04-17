@@ -1,10 +1,9 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
 {-# HLINT ignore "Use null" #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
 module Main (main) where
 
-import Otel.Effect (runOtelNoop)
 import AnimeRss.DataModel.Migrations (migrateAll)
 import AnimeRss.DataModel.Queries (
   deleteDbUser,
@@ -79,6 +78,7 @@ import Options (
   options,
  )
 import Options.Applicative (execParser)
+import Otel.Effect (runOtelNoop)
 import Relude (
   Alternative ((<|>)),
   Applicative (pure),
