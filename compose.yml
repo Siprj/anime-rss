@@ -21,7 +21,6 @@ services:
     volumes:
       - ${SOURCE_DIRECTORY}/docker/nginx.conf:/etc/nginx/nginx.conf:ro
       - ${SOURCE_DIRECTORY}/frontend:/frontend:ro
-      - tmp-nginx:/tmp/nginx/
 
   anime-rss-devel:
     image: $USER-devel
@@ -51,8 +50,52 @@ services:
     # With the infinite command we can just do `docker compose exec`.
     command: sleep infinity
 
+  opentelemetry-collector:
+    image:  otel/opentelemetry-collector-contrib:0.75.0
+    volumes:
+      - ./docker/otel-collector-config.yml:/etc/otel-collector-config.yml
+    command: [ "--config=/etc/otel-collector-config.yml" ]
+    depends_on:
+      - loki
+      - tempo
+      - prometheus
+
+  loki:
+    image: grafana/loki:2.8.0
+    volumes:
+      - ./docker/loki.yaml:/etc/loki/local-config.yaml
+    command: [ "-config.file=/etc/loki/local-config.yaml" ]
+    user: "1000:1000"
+
+  tempo:
+    image: grafana/tempo:2.0.1
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./docker/tempo.yaml:/etc/tempo.yaml
+
+  prometheus:
+    image: prom/prometheus:v2.43.0
+    command: [ "--config.file=/etc/prometheus.yaml", "--web.enable-remote-write-receiver" ]
+    volumes:
+      - ./docker/prometheus.yaml:/etc/prometheus.yaml
+
+  grafana:
+    image: grafana/grafana:9.4.7
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./docker/grafana-provisioning/:/etc/grafana/provisioning
+      - ./docker/grafana.ini/:/etc/grafana/grafana.ini
+    depends_on:
+      - loki
+      - tempo
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+
+
 volumes:
   db-data:
   # To store user history and some other tool user specific data
   home-data:
-  tmp-nginx:

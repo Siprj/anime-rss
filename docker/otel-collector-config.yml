@@ -1,0 +1,61 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: "0.0.0.0:4218"
+
+exporters:
+  logging:
+    verbosity: detailed
+
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+
+  otlp:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+processors:
+  attributes:
+    actions:
+      - action: insert
+        key: loki.format
+        value: json
+
+  resource:
+    attributes:
+      - action: insert
+        key: loki.resource.labels
+        value: machine_name,machine_id,container_name
+      - action: insert
+        key: machine_name
+        from_attribute: machine.name
+      - action: insert
+        key: machine_id
+        from_attribute: machine.id
+      - action: insert
+        key: traceID
+        from_attribute: traceid
+
+  batch:
+    send_batch_size:  500
+
+extensions:
+  health_check:
+    check_collector_pipeline:
+      enabled: false
+      interval: "5m"
+      exporter_failure_threshold: 5
+
+service:
+  extensions: [health_check]
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [resource, batch]
+      exporters: [loki, logging]
+    traces:
+      receivers: [otlp]
+      processors: [resource, batch]
+      exporters: [otlp]
