@@ -311,21 +311,19 @@ insertUserSession userId = traceInternal_ "insertUserSession" $ do
       [SQL.Only userId]
   expecOneOrZeroResults "insertUserSession" $ fmap SQL.fromOnly ret
 
-upsertGogoAnimeUrl :: (Otel :> es, PostgreSql :> es) => Text -> Eff es (Maybe SessionId)
-upsertGogoAnimeUrl url = traceInternal_ "insertGogoAnimeUrl" $ do
+upsertGogoAnimeUrl :: (Otel :> es, PostgreSql :> es) => Text -> Eff es ()
+upsertGogoAnimeUrl url = traceInternal_ "upsertGogoAnimeUrl" $ do
   ret <-
-    returning
+    execute
       [sql| INSERT INTO state (
         key,
         value
     )
-    VALUES ("gogoanime_url", ?)
+    VALUES (?, ?)
     ON CONFLICT (key) DO UPDATE SET value = excluded.value
-    RETURNING
-        value
     |]
-      [SQL.Only url]
-  expecOneOrZeroResults "upsertGogoAnimeUrl" $ fmap SQL.fromOnly ret
+      ("gogoanime_url" :: Text, url)
+  expectOneAction "upsertGogoAnimeUrl" ret
 
 selectGogoAnimeUrl :: (Otel :> es, PostgreSql :> es) => Eff es URI
 selectGogoAnimeUrl = traceInternal_ "insertGogoAnimeUrl" $ do

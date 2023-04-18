@@ -1,4 +1,5 @@
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE BlockArguments #-}
 
 module AnimeRss.DataModel.Migrations (
   migrateAll,
@@ -171,36 +172,36 @@ initSessionsTableChange =
     }
 
 initStateMigrationName :: ChangeName
-initStateMigrationName = ChangeName {changeNameText = "init_sessions"}
+initStateMigrationName = ChangeName {changeNameText = "init_state"}
 
 initStateTableChange :: Change PGMigration
 initStateTableChange =
   Change
     { changeName = initStateMigrationName
-    , changeDescription = Just "Create url table."
+    , changeDescription = Just "Create state table."
     , changeDependencies = [enableUUIDMigrationName]
     , changeMethod =
         MigrationQuery
           [sql| CREATE TABLE state (
-        key TEXT NOT NULL,
-        valueTEXT NOT NULL
+        key TEXT NOT NULL UNIQUE,
+        value TEXT NOT NULL
         )|]
     }
 
 initGogoanimeURLMigrationName :: ChangeName
-initGogoanimeURLMigrationName = ChangeName {changeNameText = "init_sessions"}
+initGogoanimeURLMigrationName = ChangeName {changeNameText = "gogoanime_url_default"}
 
 initGogoanimeURLTableChange :: Change PGMigration
 initGogoanimeURLTableChange =
   Change
     { changeName = initGogoanimeURLMigrationName
-    , changeDescription = Just "Create url table."
+    , changeDescription = Just "Insert default gogoanime_url."
     , changeDependencies = [initStateMigrationName]
     , changeMethod =
         MigrationQuery
           [sql| INSERT INTO state (
-        key,
-        value
-        ) VALUES ('gogoanime_url', 'https://gogoanime.gr')
-        |]
+            key,
+            value
+            ) VALUES ('gogoanime_url', 'https://gogoanime.gr')
+            |]
     }

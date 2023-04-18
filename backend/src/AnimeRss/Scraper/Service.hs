@@ -18,7 +18,7 @@ import AnimeRss.DataModel.Queries (insertEpisode, selectGogoAnimeUrl, upsertGogo
 import AnimeRss.Scraper.Parser.Gogoanime (getEntrisFromFronPage)
 import Control.Concurrent (threadDelay)
 import Control.Exception (SomeException)
-import Control.Monad (mapM_)
+import Control.Monad (mapM_, (>>))
 import Control.Monad.Catch (handle)
 import DBE (PostgreSql, withTransaction)
 import Data.Function (($), (.))
@@ -33,12 +33,13 @@ import Optics
 import Otel.Effect
 import Otel.Type
 import Text.Show (show)
+import Data.Semigroup ((<>))
 
 scraperScope :: Scope "scraper" "0.0.0"
 scraperScope = Scope
 
 runScraper :: (Otel :> es, PostgreSql :> es, IOE :> es) => Int -> Eff es ()
-runScraper time = handle (\exception -> logError [KeyValue "exception" . StringV . T.pack $ show @SomeException exception] "exception during the scraping")
+runScraper time = handle (\exception -> logError [KeyValue "exception" . StringV . T.pack $ show @SomeException exception] "exception during the scraping" >> liftIO (threadDelay 1000000))
   . withInstrumentationScope scraperScope
   $ do
     -- TODO: Add exception handling...
@@ -47,7 +48,8 @@ runScraper time = handle (\exception -> logError [KeyValue "exception" . StringV
     void . traceInternal_ "update redirects" $ do
       historiedResponse <- liftIO . customHistoriedMethod "GET" $ show gogoAnimeUrl
       let finalRequest = historiedResponse ^. lensVL hrFinalRequest
-      let newPath = path finalRequest
+      let newPath = "https://" <> host finalRequest
+      logInfo [KeyValue "new_url" . StringV $ T.decodeUtf8 newPath] "inserting new gogoAnimeUrl"
       upsertGogoAnimeUrl $ T.decodeUtf8 newPath
     entries <- traceInternal_ "running scraper" $ do
       liftIO $ getEntrisFromFronPage gogoAnimeUrl
