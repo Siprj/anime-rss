@@ -10,3 +10,4 @@ cabal.project.local
 cabal.project.local~
 anime-rss-nginx.tar
 anime-rss-service.tar
+cabal.project.local~*
