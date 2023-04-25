@@ -473,9 +473,9 @@ viewProfilePageData : String -> ProfileData -> List (Html Msg)
 viewProfilePageData origin profileData =
     [ div [class "profile-data"]
         [ div [class "profile-data-row"]
-            [ text <| "New anime RSS channel: ", Html.a [href "atom/animes/"] [text <| origin ++ "/atom/episodes"] ]
+            [ text <| "New anime RSS channel: ", Html.a [href "atom/animes/"] [text <| origin ++ "/atom/animes"] ]
         , div [class "profile-data-row"]
-            [ text <| "Episode RSS channel: ", Html.a [href <| "atom/episodes/" ++ profileData.episodeChannel] [text <| origin ++ "/atom/episodes" ++ profileData.episodeChannel] ]
+            [ text <| "Episode RSS channel: ", Html.a [href <| "atom/episodes/" ++ profileData.episodeChannel] [text <| origin ++ "/atom/episodes/" ++ profileData.episodeChannel] ]
         ]
     ]
 

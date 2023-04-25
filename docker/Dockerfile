@@ -1,15 +1,12 @@
 # Ubuntu 20.04 LTS (Focal Fossa), supported until April 2025.
 ARG UBUNTU_VERSION=22.04
+ARG NGIXN_VERSION=1.24.0
 ARG GHC_VERSION=9.4.4
 ARG CABAL_VERSION=3.6.2.0
 ARG HLINT_VERSION=3.5
 ARG HLS_VERSION=1.10.0.0
 
-FROM ubuntu:$UBUNTU_VERSION as anime-rss-devel-base
-ARG CABAL_INDEX_STATE
-ARG CABAL_VERSION
-ARG GHC_VERSION
-ARG HLINT_VERSION
+FROM ubuntu:$UBUNTU_VERSION as anime-rss-base
 RUN apt-get update \
     && apt-get install -y \
        build-essential curl locales libgmp-dev libtinfo-dev zlib1g-dev git \
@@ -19,6 +16,12 @@ RUN apt-get update \
     && localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man
 ENV LANG=en_US.UTF-8
+
+FROM anime-rss-base as anime-rss-devel-base
+ARG CABAL_INDEX_STATE
+ARG CABAL_VERSION
+ARG GHC_VERSION
+ARG HLINT_VERSION
 ENV GHCUP_INSTALL_BASE_PREFIX="/opt/"
 ENV PATH="/opt/.ghcup/bin:$PATH"
 RUN mkdir -p /opt/.ghcup/bin/ \
@@ -40,6 +43,17 @@ RUN HLIN_TMP=$(mktemp -d ".hlint-XXXXXX") \
     && rm -r -f /opt/ghcup/cache \
     && rm -r -f /opt/ghcup/tmp \
     && echo root:password | chpasswd
+
+FROM anime-rss-base as anime-rss-service
+COPY anime-rss-dist/bin/ /anime-rss-service/bin/
+RUN useradd -U -u 1000 -d /anime-rss-service anime-rss-service
+USER anime-rss-service
+WORKDIR /anime-rss-service/
+CMD /anime-rss-service/bin/anime-rss
+
+FROM nginx:$NGIXN_VERSION as anime-rss-nginx
+COPY anime-rss-dist/frontend/ /frontend/
+CMD ["nginx", "-g", "daemon off;"]
 
 FROM anime-rss-devel-base as anime-rss-devel
 ARG USER=devel

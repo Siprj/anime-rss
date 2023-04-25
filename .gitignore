@@ -4,3 +4,9 @@ elm-stuff/
 node_modules/
 .env
 elm.js
+anime-rss-dist
+frontend/elm.min.js
+cabal.project.local
+cabal.project.local~
+anime-rss-nginx.tar
+anime-rss-service.tar
