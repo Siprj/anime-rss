@@ -140,7 +140,7 @@ insertEpisode CreateEpisode {..} = traceInternal_ "insertEpisode" $ do
         anime_id
     )
     VALUES (?,?,?)
-    ON CONFLICT (url) DO UPDATE SET url = excluded.url
+    ON CONFLICT (anime_id, number) DO UPDATE SET url = excluded.url
     |]
         (url, number, animeId)
   expectOneAction "insertEpisode" ret2
