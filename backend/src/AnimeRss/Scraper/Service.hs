@@ -34,6 +34,8 @@ import Otel.Effect
 import Otel.Type
 import Text.Show (show)
 import Data.Semigroup ((<>))
+import Prelude (fromIntegral)
+import Data.List (length)
 
 scraperScope :: Scope "scraper" "0.0.0"
 scraperScope = Scope
@@ -53,7 +55,7 @@ runScraper time = handle (\exception -> logError [KeyValue "exception" . StringV
       upsertGogoAnimeUrl $ T.decodeUtf8 newPath
     entries <- traceInternal_ "running scraper" $ do
       liftIO $ getEntrisFromFronPage gogoAnimeUrl
-    logInfo_ "data from gogoanime received"
+    logInfo [KeyValue "number of entries" . IntV . fromIntegral $ length entries] "data from gogoanime received"
     traceInternal_ "inserting scraped data into DB" $ do
       mapM_ (withTransaction . insertEpisode) entries
     logInfo_ "scrapper finished"

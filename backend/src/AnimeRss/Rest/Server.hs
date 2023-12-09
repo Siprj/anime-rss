@@ -12,13 +12,12 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module AnimeRss.Rest.Server (
-  Context (..),
   apiHander,
   authHandlerSession,
   AuthSessionHandler,
 ) where
 
-import AnimeRss.DataModel.Queries (deleteUserFollows, getDbUserById, insertUserFollows, insertUserSession, listAnimes, listEpisodesByChannelId, listUserRelatedAnime, selectUserByEmail, selectUserBySession)
+import AnimeRss.DataModel.Queries (deleteUserFollows, getDbUserById, insertUserFollows, insertUserSession, listAnimes, listEpisodesByChannelId, listUserRelatedAnime, selectUserByEmail, selectUserBySession, selectGogoAnimeUrl)
 import AnimeRss.DataModel.Types (CreateUserFollows (..), DeleteUserFollows (..), toPasswordHash)
 import AnimeRss.DataModel.Types qualified as Core
 import AnimeRss.Ids (fromId)
@@ -50,7 +49,6 @@ import Data.UUID (fromASCIIBytes, toASCIIBytes)
 import Data.UUID.V4 (nextRandom)
 import Effectful (Eff, IOE, MonadIO (..), (:>))
 import Effectful.Error.Dynamic (Error, throwError)
-import Effectful.Reader.Dynamic (Reader, ask)
 import Network.HTTP.Types (hCookie)
 import Network.Wai
 import Otel.Effect
@@ -110,11 +108,7 @@ authHandlerSession runEffectStack = mkAPIAuthHandler handler
     -- TODO: Add logging for errors...
     justOrErr401 logMessage Nothing = logInfo_ logMessage >> throwError err401
 
-newtype Context = Context
-  { baseUri :: URI
-  }
-
-type Handler' es = (Error ServerError :> es, Reader Context :> es, PostgreSql :> es)
+type Handler' es = (Error ServerError :> es, PostgreSql :> es)
 
 type RestServer api es = ServerT api (Eff es)
 
@@ -188,16 +182,16 @@ loginHandler Login {..} = traceInternal_ "loginHandler" $ do
 
 atomEpisodesGetHandler :: (Handler' es, Otel :> es) => ChannelId -> Eff es Feed
 atomEpisodesGetHandler channelId = traceInternal_ "atomEpisodesGetHandler" $ do
-  context <- ask
   episodes <- listEpisodesByChannelId channelId
+  baseUri <- selectGogoAnimeUrl
 
   let lastModification = Nothing
 
-  pure . feedFromAtom . fd context lastModification $
+  pure . feedFromAtom . fd baseUri lastModification $
     fmap toEntry episodes
   where
-    fd :: Context -> Maybe UTCTime -> [Entry] -> Atom.Feed
-    fd Context {..} date entries =
+    fd :: URI -> Maybe UTCTime -> [Entry] -> Atom.Feed
+    fd baseUri date entries =
       fd'
         { feedLinks = [nullLink $ show baseUri]
         , feedEntries = entries
@@ -231,15 +225,15 @@ atomEpisodesGetHandler channelId = traceInternal_ "atomEpisodesGetHandler" $ do
 atomAnimeGetHandler :: (Otel :> es, Handler' es) => Eff es Feed
 atomAnimeGetHandler = traceInternal_ "atomAnimeGetHandler" $ do
   animes <- listAnimes
-  context <- ask
+  baseUri <- selectGogoAnimeUrl
 
   let lastModification = Nothing
 
-  pure . feedFromAtom . fd context lastModification $
+  pure . feedFromAtom . fd baseUri lastModification $
     fmap toEntry animes
   where
-    fd :: Context -> Maybe UTCTime -> [Entry] -> Atom.Feed
-    fd Context {..} date entries =
+    fd :: URI -> Maybe UTCTime -> [Entry] -> Atom.Feed
+    fd baseUri date entries =
       fd'
         { feedLinks = [nullLink $ show baseUri]
         , feedEntries = entries

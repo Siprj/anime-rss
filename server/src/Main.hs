@@ -1,12 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Main (main) where
@@ -22,7 +18,6 @@ import AnimeRss.DataModel.Migrations (migrateAll)
 import AnimeRss.Rest.Api (Api)
 import AnimeRss.Rest.Server (
   AuthSessionHandler,
-  Context (Context),
   apiHander,
   authHandlerSession,
  )
@@ -44,9 +39,6 @@ import Data.Vector (singleton)
 import Effectful (MonadIO (liftIO), runEff)
 import Effectful.Concurrent (forkIO, runConcurrent)
 import Effectful.Error.Dynamic (runErrorNoCallStack)
-import Effectful.Reader.Dynamic (runReader)
-import Network.URI (URI)
-import Network.URI.Static (staticURI)
 import Network.Wai.Handler.Warp (defaultSettings, runSettings, setInstallShutdownHandler, setPort)
 import Optics ((&), (.~))
 import Otel.Client (OtelClientParameters (logEnpoint, traceEndpoint), defautOtelClientParameters, startOtelClient)
@@ -61,11 +53,6 @@ import System.Posix.Signals (
   sigINT,
   sigTERM,
  )
-
--- FIXME: This and other hardoced URLs need to be dynamic and need to be sotred
--- in the DB.
-baseUrl :: URI
-baseUrl = $$(staticURI "https://gogoanime.sk/")
 
 main :: IO ()
 main = do
@@ -85,7 +72,7 @@ main = do
           nat eff = do
             res <-
               liftIO . runEff . runErrorNoCallStack . runDBE dbPool . runOtel otelClient (Just $ TraceData "Warp" Internal mempty links) $
-                runReader (Context baseUrl) eff
+                eff
             either throwError pure res
 
       liftIO . runSettings settings . serveWithContext restAPI cfg $
